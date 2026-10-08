@@ -256,6 +256,12 @@
         });
     };
 
+    // ONLYOFFICE stores field.Value (e.g. "ITEM MENDELEY_CITATION_v3_...") as ctrl.Tag.
+    // Strip the "ITEM " prefix so tag comparisons work consistently.
+    function normalizeTag(raw) {
+        return (raw || "").replace(/^ITEM /, "");
+    }
+
     DocumentModule.prototype.getCitations = function () {
         return this.adapter.getAllContentControls().then(function (controls) {
             var records = [];
@@ -263,7 +269,7 @@
 
             for (var i = 0; i < controls.length; i++) {
                 var ctrl = controls[i];
-                var tag = ctrl.Tag || "";
+                var tag = normalizeTag(ctrl.Tag);
                 if (tag.indexOf(TAG_PREFIX) === 0) {
                     try {
                         var b64 = tag.substring(TAG_PREFIX.length);
@@ -311,7 +317,8 @@
             if (!controls || !controls.length) return null;
             for (var i = 0; i < controls.length; i++) {
                 var ctrl = controls[i];
-                if (ctrl.Tag === BIB_TAG) {
+                var tag = normalizeTag(ctrl.Tag);
+                if (tag === BIB_TAG) {
                     log("debug", "DocumentModule.getBibliography.found", { internalId: ctrl.InternalId });
                     return { internalId: ctrl.InternalId };
                 }
@@ -335,7 +342,7 @@
             var removalPromises = [];
             for (var i = 0; i < controls.length; i++) {
                 var ctrl = controls[i];
-                var tag = ctrl.Tag || "";
+                var tag = normalizeTag(ctrl.Tag);
                 if (tag.indexOf(TAG_PREFIX) === 0 || tag === BIB_TAG || tag.indexOf("MENDELEY_CITATION_") === 0) {
                     removalPromises.push(self.adapter.removeContentControl(ctrl.InternalId));
                 }
