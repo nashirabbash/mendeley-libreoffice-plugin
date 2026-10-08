@@ -1,0 +1,84 @@
+const assert = require("assert");
+const { DocumentModule, InMemoryAdapter } = require("../scripts/document.js");
+
+async function runTests() {
+    console.log("# Testing DocumentModule and InMemoryAdapter");
+
+    // Test 1: Insert inline citation
+    const inMem = new InMemoryAdapter();
+    const doc = new DocumentModule(inMem);
+
+    const testItems = [
+        {
+            id: "doc1",
+            itemData: { id: "doc1", title: "Study of Architecture", author: [{ family: "Turing" }] },
+            locator: "14",
+            label: "page"
+        }
+    ];
+
+    const ctrlId = await doc.insertCitation(testItems, "<b>(Turing, 2026, p. 14)</b>", false);
+    assert.ok(ctrlId, "Control ID must be returned");
+    assert.strictEqual(inMem.controls.length, 1, "Should have 1 control in memory");
+    assert.strictEqual(inMem.controls[0].text, "(Turing, 2026, p. 14)", "HTML tags must be stripped from rendered text");
+    assert.strictEqual(inMem.footnotesCount, 0, "No footnotes should be created for inline style");
+
+    // Test 2: Read citations back
+    const citations = await doc.getCitations();
+    assert.strictEqual(citations.length, 1, "Should retrieve 1 citation record");
+    assert.strictEqual(citations[0].internalId, ctrlId);
+    assert.strictEqual(citations[0].citationItems.length, 1);
+    assert.strictEqual(citations[0].citationItems[0].id, "doc1");
+    assert.strictEqual(citations[0].citationItems[0].locator, "14");
+    assert.strictEqual(citations[0].citationItems[0].itemData.title, "Study of Architecture");
+    assert.strictEqual(citations[0].isNoteStyle, false);
+
+    // Test 3: Insert note style citation (triggers footnote)
+    const noteItems = [
+        { id: "doc2", itemData: { id: "doc2", title: "Note Work" } }
+    ];
+    const noteCtrlId = await doc.insertCitation(noteItems, "<sup>1</sup>", true);
+    assert.strictEqual(inMem.controls.length, 2);
+    assert.strictEqual(inMem.footnotesCount, 1, "Footnote must be created for note style");
+
+    // Test 4: Update citation text
+    await doc.updateCitationText(ctrlId, "<i>(Turing, 2026, pp. 14-16)</i>");
+    assert.strictEqual(inMem.controls[0].text, "(Turing, 2026, pp. 14-16)", "Updated text must have HTML tags stripped");
+
+    // Test 5: Insert & get bibliography
+    let bib = await doc.getBibliography();
+    assert.strictEqual(bib, null, "Bibliography should not exist yet");
+
+    const bibId = await doc.insertBibliography("<p>Turing. (2026). Study of Architecture.</p>");
+    assert.ok(bibId);
+    assert.strictEqual(inMem.controls.length, 3);
+
+    bib = await doc.getBibliography();
+    assert.ok(bib);
+    assert.strictEqual(bib.internalId, bibId);
+
+    // Test 6: Update bibliography HTML
+    await doc.updateBibliographyHtml(bibId, "<p>Turing. (2026). Study of Architecture (2nd ed).</p>");
+    const bibCtrl = inMem.controls.find(c => c.internalId === bibId);
+    assert.strictEqual(bibCtrl.html, "<p>Turing. (2026). Study of Architecture (2nd ed).</p>");
+
+    // Test 7: Add unrelated third-party control and unlink all
+    inMem.controls.push({
+        internalId: "other_ctrl_99",
+        tag: "SOME_OTHER_PLUGIN_TAG",
+        text: "Keep me",
+        html: "Keep me"
+    });
+    assert.strictEqual(inMem.controls.length, 4);
+
+    await doc.unlinkAll();
+    assert.strictEqual(inMem.controls.length, 1, "Only non-Mendeley control should remain");
+    assert.strictEqual(inMem.controls[0].internalId, "other_ctrl_99", "Unrelated control must not be deleted");
+
+    console.log("# All tests passed successfully!");
+}
+
+runTests().catch(err => {
+    console.error("Test failed:", err);
+    process.exit(1);
+});
