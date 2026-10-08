@@ -1626,9 +1626,13 @@
     }
 
     function checkSelected() {
-        var hasSelected = selected.count() > 0;
-        // Only pills wrapper toggles on selection, buttons stay always visible
+        var count = selected.count();
+        var hasSelected = count > 0;
+        var manySelected = count >= 3;
+        // Pills wrapper visibility
         switchClass(elements.selectedWrapper, displayNoneClass, !hasSelected);
+        // Split-view layout when >=3 items
+        switchClass(elements.mainState, "has-many-selected", manySelected);
         if (elements.insertLinkBtn) {
             elements.insertLinkBtn.style.opacity = hasSelected ? "1" : "0.6";
             elements.insertLinkBtn.style.pointerEvents = hasSelected ? "auto" : "none";

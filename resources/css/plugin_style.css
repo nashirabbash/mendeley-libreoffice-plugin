@@ -462,6 +462,7 @@ html, body {
     border-top: 1px solid var(--border-color);
     box-shadow: var(--shadow-sticky);
     z-index: 50;
+    flex-shrink: 0;
 }
 
 #selectedWrapper {
@@ -476,6 +477,44 @@ html, body {
     gap: 6px;
     max-height: 80px;
     overflow-y: auto;
+}
+
+/* Split-view: when >=3 items selected, docs list shrinks to 50%,
+   selected panel expands to fill remaining space above the buttons bar */
+#mainState.has-many-selected {
+    overflow: hidden;
+}
+
+#mainState.has-many-selected #docsWrapper {
+    flex: 0 0 50%;
+    min-height: 0;
+}
+
+#mainState.has-many-selected #controlsHolder {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    box-shadow: none;
+    border-top: 1px solid var(--border-color);
+}
+
+#mainState.has-many-selected #selectedWrapper {
+    flex: 1 1 0%;
+    overflow-y: auto;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+#mainState.has-many-selected #selectedHolder {
+    max-height: none;
+    overflow-y: visible;
+}
+
+#mainState.has-many-selected #buttonsWrapper {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-sticky);
 }
 
 .citation-pill {
