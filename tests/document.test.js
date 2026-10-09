@@ -21,6 +21,7 @@ async function runTests() {
     assert.ok(ctrlId, "Control ID must be returned");
     assert.strictEqual(inMem.controls.length, 1, "Should have 1 control in memory");
     assert.strictEqual(inMem.controls[0].text, "(Turing & Lovelace, 2026, p. 14)", "HTML tags must be stripped and entities decoded from rendered text");
+    assert.strictEqual(inMem.controls[0].lock, 3, "Inline citation control must allow editing and deletion");
     assert.strictEqual(inMem.controls[0].placeHolderText, "(Turing & Lovelace, 2026, p. 14)", "PlaceHolderText must match citation text to prevent default 'Your text here'");
     assert.strictEqual(inMem.footnotesCount, 0, "No footnotes should be created for inline style");
     // Test 2: Read citations back
@@ -52,6 +53,7 @@ async function runTests() {
 
     const bibId = await doc.insertBibliography("<p>Turing. (2026). Study of Architecture.</p>", { hangingIndent: true });
     assert.ok(bibId);
+    assert.strictEqual(inMem.controls[2].lock, 3, "Bibliography control must allow editing and deletion");
     assert.strictEqual(inMem.controls.length, 3);
     assert.strictEqual(inMem.controls[2].options.hangingIndent, true, "Hanging indent option should be saved");
 

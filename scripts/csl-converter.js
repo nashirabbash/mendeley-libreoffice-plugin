@@ -112,10 +112,8 @@
             cslData.number = item.revision || item.series_number;
         }
 
-        if (item.series || item.source) {
-            cslData["container-title"] = item.series || item.source;
-            cslData["collection-title"] = item.series || item.source;
-        }
+        if (item.series) cslData["collection-title"] = item.series;
+        if (item.source) cslData["container-title"] = item.source;
 
         if (item.type === "patent" && item.source) {
             cslData.publisher = item.source;

@@ -119,12 +119,13 @@
                 var fetchPromise = CslLoader.getStyle ? CslLoader.getStyle(styleId) : Promise.resolve();
                 fetchPromise.then(function () {
                     if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
-                    if (app.CitationSync && app.CitationSync.refreshDocumentCitations) {
-                        app.CitationSync.refreshDocumentCitations();
-                    }
-                    if (changeStyleDrawer) changeStyleDrawer.classList.add(displayNoneClass);
-                    if (settingsDrawer) settingsDrawer.classList.remove(displayNoneClass);
-                    updateSettingsOverview();
+                    var refreshPromise = app.CitationSync && app.CitationSync.refreshDocumentCitations ?
+                        app.CitationSync.refreshDocumentCitations() : Promise.resolve();
+                    return refreshPromise.then(function () {
+                        if (changeStyleDrawer) changeStyleDrawer.classList.add(displayNoneClass);
+                        if (settingsDrawer) settingsDrawer.classList.remove(displayNoneClass);
+                        updateSettingsOverview();
+                    });
                 }).catch(function (err) {
                     if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
                     if (Helpers && Helpers.showError) Helpers.showError("Failed to load citation style: " + err.message);

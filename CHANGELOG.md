@@ -1,5 +1,9 @@
 # Change Log
 
+- Waited for citation and existing bibliography refresh to finish after style changes before allowing bibliography commands, preventing overlapping document writes.
+- Fixed duplicate journal names in bibliography output by mapping Mendeley source and series to separate CSL fields.
+- Explicitly set italic and bold on every bibliography run from CSL markup, preventing Word insertion formatting from leaking into unformatted text.
+- Set citation and bibliography content controls to full access and unlock existing Mendeley controls when plugin starts, enabling manual formatting in ONLYOFFICE.
 ## 1.1.0
 - Added per-user Linux `.deb`/`.rpm` and Windows installers with x64/ARM64 build matrix.
 - Bundled OAuth loopback helper so end users do not install Python or run the server manually.

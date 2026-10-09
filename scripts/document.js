@@ -83,6 +83,7 @@
             placeHolderText: properties.PlaceHolderText,
             text: isHtml ? String(content || "").replace(/<[^>]+>/g, "") : (content || ""),
             html: content || "",
+            lock: properties.Lock,
             type: type,
             options: options || {}
         };
@@ -148,6 +149,36 @@
     };
     InMemoryAdapter.prototype.getDocumentText = function () {
         return Promise.resolve(this.docText || "");
+    };
+
+    InMemoryAdapter.prototype.unlockManagedContentControls = function () {
+        return Promise.resolve();
+    };
+
+    OnlyOfficeAdapter.prototype.unlockManagedContentControls = function () {
+        return new Promise(function (resolve, reject) {
+            if (typeof window === "undefined" || !window.Asc || !window.Asc.plugin) {
+                resolve();
+                return;
+            }
+            try {
+                window.Asc.plugin.callCommand(function () {
+                    var controls = Api.GetDocument().GetAllContentControls();
+                    for (var i = 0; i < controls.length; i++) {
+                        var control = controls[i];
+                        var tag = (control.GetTag() || "").replace(/^ITEM /, "");
+                        if (tag.indexOf("MENDELEY_CITATION_") === 0 || tag === "MENDELEY_BIBLIOGRAPHY") {
+                            control.SetLock("unlocked");
+                        }
+                    }
+                }, false, false, function () {
+                    log("success", "OnlyOfficeAdapter.unlockManagedContentControls", {});
+                    resolve();
+                });
+            } catch (error) {
+                reject(error);
+            }
+        });
     };
 
     function OnlyOfficeAdapter() {}
@@ -278,10 +309,7 @@
             }
 
             var arr = [{
-                Props: {
-                    Tag: tag,
-                    Lock: 0
-                },
+                Props: { Tag: tag, Lock: 3 },
                 Script: script
             }];
 
@@ -350,6 +378,7 @@
                 var fnPara = fnParas[fnParas.length - 1];
                 var sdt = Api.CreateInlineLvlSdt();
                 sdt.SetTag(Asc.scope.noteTag);
+                sdt.SetLock("unlocked");
                 var runs = Asc.scope.noteRuns || [];
                 for (var i = 0; i < runs.length; i++) {
                     var run = Api.CreateRun();
@@ -374,8 +403,8 @@
             }
             var cleanText = String(text || "").replace(/<[^>]+>/g, "");
             var arr = [{
-                Props: { InternalId: internalId },
-                Script: "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(cleanText) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});"
+                Props: { InternalId: internalId, Lock: 3 },
+                Script: "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); var oRun = Api.CreateRun(); oRun.AddText(" + JSON.stringify(cleanText) + "); oRun.SetItalic(false); oRun.SetBold(false); oPara.AddElement(oRun); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});"
             }];
             window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function () {
                 log("info", "OnlyOfficeAdapter.updateControlText", { internalId: internalId });
@@ -405,7 +434,7 @@
             }
 
             var arr = [{
-                Props: { InternalId: internalId },
+                Props: { InternalId: internalId, Lock: 3 },
                 Script: script
             }];
             window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function () {
@@ -447,6 +476,12 @@
             return this._adapter;
         }
     });
+    DocumentModule.prototype.unlockManagedContentControls = function () {
+        return this.adapter.unlockManagedContentControls().then(function () {
+            log("success", "DocumentModule.unlockManagedContentControls", {});
+        });
+    };
+
 
     DocumentModule.prototype.insertCitation = function (citationItems, renderedText, isNoteStyle) {
         var plainText = String(renderedText || "").replace(/<[^>]+>/g, "");
@@ -474,7 +509,7 @@
         var op = Promise.resolve();
         return op.then(function () {
             if (self.adapter && self.adapter.addContentControl) {
-                return self.adapter.addContentControl(2, { Tag: base64Tag, Lock: 0, PlaceHolderText: cleanText }, cleanText, false);
+                return self.adapter.addContentControl(2, { Tag: base64Tag, Lock: 3, PlaceHolderText: cleanText }, cleanText, false);
             }
             return self.adapter.addAddinField(addinField);
         }).then(function (result) {
@@ -546,7 +581,7 @@
         var rawHtml = (html && html.join) ? html.join("") : String(html || "");
         var self = this;
         if (self.adapter && self.adapter.addContentControl) {
-            return self.adapter.addContentControl(1, { Tag: BIB_TAG, Lock: 0, PlaceHolderText: "Bibliography" }, rawHtml, true, options).then(function (res) {
+            return self.adapter.addContentControl(1, { Tag: BIB_TAG, Lock: 3, PlaceHolderText: "Bibliography" }, rawHtml, true, options).then(function (res) {
                 log("success", "DocumentModule.insertBibliography", {});
                 return res;
             });

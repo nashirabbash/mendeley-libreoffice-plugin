@@ -67,6 +67,9 @@
             currentCollectionLabel: document.getElementById("currentCollectionLabel")
         };
         App.elements = elements;
+        App.documentModule.unlockManagedContentControls().catch(function (err) {
+            Logger.warn("Code.init.unlockManagedContentControls.error", { error: String(err) });
+        });
 
         App.sdk = MendeleySDK({
             authFlow: Auth.authFlow

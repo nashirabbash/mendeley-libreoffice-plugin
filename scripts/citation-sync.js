@@ -18,13 +18,14 @@
 
         if (!selectedStyle || !CslLoader.styles || !CslLoader.styles[selectedStyle] ||
             !selectedLocale || !CslLoader.locales || !CslLoader.locales[selectedLocale] || !documentModule) {
-            return;
+            return Promise.resolve();
         }
 
-        documentModule.getCitations().then(function (citationRecords) {
+        return documentModule.getCitations().then(function (citationRecords) {
             if (!citationRecords || !citationRecords.length) return;
             var allDocCslItems = {};
             var allDocIds = [];
+            var citationUpdates = [];
 
             citationRecords.forEach(function (cluster) {
                 var cslItems = {};
@@ -81,7 +82,7 @@
                         }
                     }
 
-                    documentModule.updateCitationText(cluster.internalId, formatted);
+                    citationUpdates.push(documentModule.updateCitationText(cluster.internalId, formatted));
                 } catch (e) {
                     if (Logger && typeof Logger.warn === "function") {
                         Logger.warn("CitationSync.refreshCitationError", { error: String(e) });
@@ -89,8 +90,9 @@
                 }
             });
 
+            var bibliographyUpdate = Promise.resolve();
             if (allDocIds.length) {
-                documentModule.getBibliography().then(function (bibRecord) {
+                bibliographyUpdate = documentModule.getBibliography().then(function (bibRecord) {
                     if (!bibRecord) return;
                     try {
                         var engineBib = new CSL.Engine({
@@ -104,7 +106,7 @@
                             var bibOptions = {
                                 hangingIndent: bibParams.hangingindent !== 0 && bibParams.hangingindent !== false
                             };
-                            documentModule.updateBibliographyHtml(bibRecord.internalId, bibRes[1], bibOptions);
+                            return documentModule.updateBibliographyHtml(bibRecord.internalId, bibRes[1], bibOptions);
                         }
                     } catch (eb) {
                         if (Logger && typeof Logger.warn === "function") {
@@ -113,6 +115,7 @@
                     }
                 });
             }
+            return Promise.all([Promise.all(citationUpdates), bibliographyUpdate]);
         });
     }
 

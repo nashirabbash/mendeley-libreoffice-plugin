@@ -42,6 +42,8 @@ async function runTests() {
     assert.ok(scriptWithIndent.includes("SetIndLeft(720)"), "Must set left indent for hanging indent");
     assert.ok(scriptWithIndent.includes("SetIndFirstLine(-720)"), "Must set negative first line indent");
     assert.ok(scriptWithIndent.includes("SetItalic(true)"), "Must set italic on title run");
+    assert.ok(scriptWithIndent.includes("r0_0.SetItalic(false)"), "Plain text run must explicitly disable inherited italics");
+    assert.ok(scriptWithIndent.includes("r0_0.SetBold(false)"), "Plain text run must explicitly disable inherited bold");
     assert.ok(scriptWithIndent.includes("InsertContent("), "Must insert paragraphs into document");
 
     // Test 4: Generate DocumentBuilder script without hanging indent

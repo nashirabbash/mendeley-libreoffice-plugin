@@ -32,6 +32,15 @@ assert.strictEqual(csl.title, "Quantum Entanglement");
 assert.deepStrictEqual(csl.issued, { "date-parts": [[2024]] });
 assert.strictEqual(csl.author[0].family, "Einstein");
 
+
+const journalCsl = CslConverter.convertMendeleyToCSL({
+    id: "journal-id",
+    type: "journal",
+    source: "Psychometrika",
+    series: "Series 1"
+});
+assert.strictEqual(journalCsl["container-title"], "Psychometrika");
+assert.strictEqual(journalCsl["collection-title"], "Series 1");
 // Test CitationSelection label formatting
 const CitationSelection = require("../scripts/citation-selection");
 const pillLabel = CitationSelection.getCitationPillLabel({

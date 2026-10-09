@@ -160,12 +160,8 @@
                 var run = runs[r];
                 var rVar = "r" + p + "_" + r;
                 lines.push("var " + rVar + " = " + pVar + ".AddText(" + JSON.stringify(run.text) + ");");
-                if (run.italic) {
-                    lines.push(rVar + ".SetItalic(true);");
-                }
-                if (run.bold) {
-                    lines.push(rVar + ".SetBold(true);");
-                }
+                lines.push(rVar + ".SetItalic(" + (run.italic ? "true" : "false") + ");");
+                lines.push(rVar + ".SetBold(" + (run.bold ? "true" : "false") + ");");
             }
 
             lines.push("aParas.push(" + pVar + ");");
