@@ -7,7 +7,7 @@
 [![License: Apache 2.0](https://img.shields.io/github/license/nashirabbash/plugin-mendeley?style=flat-square)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/nashirabbash/plugin-mendeley?style=flat-square)](https://github.com/nashirabbash/plugin-mendeley/releases)
 
-[![Mendeley plugin demo](assets/demo_video.gif)](assets/demo_video_update.mp4)
+![Mendeley plugin demo](assets/demo_video.gif)
 
 *Find references, insert citations, and build bibliographies in ONLYOFFICE.*
 
