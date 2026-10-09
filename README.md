@@ -55,28 +55,7 @@ Download `mendeley-linux-installer.tar.gz` from [Releases](https://github.com/na
 ./install.sh
 ```
 
-**Option 3: Debian / Ubuntu / Linux Mint (`.deb`)**
-Download `mendeley-onlyoffice_1.1.1_all.deb` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases) and install:
-
-```bash
-sudo dpkg -i mendeley-onlyoffice_1.1.1_all.deb
-mendeley-onlyoffice-setup
-```
-
-**Option 4: Fedora / RHEL / openSUSE (`.rpm`)**
-Download `mendeley-onlyoffice-1.1.1-1.noarch.rpm` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases) and install:
-
-```bash
-sudo dnf install ./mendeley-onlyoffice-1.1.1-1.noarch.rpm
-mendeley-onlyoffice-setup
-```
-
-To uninstall at any time, run `mendeley-onlyoffice-remove` or `./uninstall.sh`.
-
-#### Windows
-
-1. Download the Windows installer package from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases).
-2. Run setup and select your ONLYOFFICE plugin directory. The background helper starts automatically.
+To uninstall at any time, run `./uninstall.sh`.
 
 #### Manual ONLYOFFICE GUI Installation (`.plugin`)
 
