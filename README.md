@@ -149,8 +149,8 @@ If Mendeley login reports that port `127.0.0.1:8080` is in use, another applicat
 
 ## Contributors
 
-- [nashirabbash](https://github.com/nashirabbash)
-- [julsanjh](https://github.com/julsanjh)
+[![nashirabbash](https://github.com/nashirabbash.png?size=100)](https://github.com/nashirabbash)
+[![julsanjh](https://github.com/julsanjh.png?size=100)](https://github.com/julsanjh)
 
 ## Contributing
 
