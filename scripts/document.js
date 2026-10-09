@@ -327,21 +327,34 @@
                 resolve("");
                 return;
             }
+
+            // Pre-set Asc.scope before callCommand to bridge variables across to editor frame
+            window.Asc = window.Asc || {};
+            window.Asc.scope = window.Asc.scope || {};
+            window.Asc.scope.noteTag = tag;
+            window.Asc.scope.noteText = cleanText;
+
             window.Asc.plugin.callCommand(function () {
                 var oDoc = Api.GetDocument();
                 oDoc.AddFootnote();
                 var fnParas = oDoc.GetFootnotesFirstParagraphs();
                 if (fnParas && fnParas.length > 0) {
                     var fnPara = fnParas[fnParas.length - 1];
-                    var sdt = Api.CreateInlineLvlSdt();
-                    sdt.SetTag(Asc.scope.tag);
-                    sdt.AddText(Asc.scope.text);
-                    fnPara.AddInlineLvlSdt(sdt);
+                    var tagVal = (typeof Asc !== "undefined" && Asc.scope && Asc.scope.noteTag) || "";
+                    var textVal = (typeof Asc !== "undefined" && Asc.scope && Asc.scope.noteText) || "";
+                    try {
+                        var sdt = Api.CreateInlineLvlSdt();
+                        sdt.SetTag(tagVal);
+                        sdt.AddText(textVal);
+                        fnPara.AddInlineLvlSdt(sdt);
+                    } catch (e) {
+                        fnPara.AddText(textVal);
+                    }
                 }
             }, false, true, function () {
                 log("info", "OnlyOfficeAdapter.addNoteCitation.success", { tag: tag });
                 resolve(tag);
-            }, { tag: tag, text: cleanText });
+            });
         });
     };
 
