@@ -14,7 +14,7 @@ Mendeley plugin lets users search their Mendeley library and insert formatted ci
 | **Auth** | Robust OAuth callback (`oauth.html`), stale-token cleared on new login, automatic session reset on 401, unified startup with no duplicate API calls. |
 | **Infinite scroll** | Targets the real scrollable `#docsWrapper` container with a threshold check and native `scroll` events. Removes the phantom spacer div that caused blank space below the list. |
 | **UI** | All emojis and text arrows replaced with scalable SVG icons across menus, toolbars, and drawers. |
-| **Tests** | `tests/document.test.js` and `tests/scroll.test.js` — run with Node, no test framework required. |
+| **Tests** | Node.js suites cover document behavior, scroll thresholds, and multi-page reference loading. |
 | **Agent docs** | `AGENTS.md`, `CODING_STANDARDS.md`, `CONTEXT.md`, `docs/adr/` for AI-assisted development. |
 
 ---
@@ -132,11 +132,11 @@ No test framework needed — plain Node.js:
 ```bash
 node tests/document.test.js
 node tests/scroll.test.js
+node tests/library-pagination.test.js
 ```
 
-Both suites print pass/fail and exit with code 0 on success.
+All suites print pass/fail and exit with code 0 on success.
 
----
 
 ## Project structure
 
@@ -153,6 +153,7 @@ plugin-mendeley/
 │   └── thirdparty/           # fetch, promise, URL polyfills
 ├── tests/
 │   ├── document.test.js      # Unit tests for DocumentModule + InMemoryAdapter
+│   ├── library-pagination.test.js # Multi-page reference loading through scroll
 │   └── scroll.test.js        # Unit tests for infinite scroll logic
 ├── resources/
 │   ├── css/plugin_style.css
