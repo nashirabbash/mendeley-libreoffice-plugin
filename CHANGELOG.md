@@ -1,5 +1,7 @@
 # Change Log
 
+- Auto-synced active Mendeley Reference Manager session token across Linux, Windows, and macOS, allowing seamless zero-config login without manual Application ID input.
+- Fixed Linux and Windows installers to target official ONLYOFFICE plugin GUID `{BE5CBF95-C0AD-4842-B157-AC40FEDD9441}` with compatibility symlinks for Flatpak and desktop editors.
 - Fixed ONLYOFFICE `file://` login requests rejected by Helper CORS; allow file and loopback origins, keep remote origins blocked, and clear stale login errors on retry.
 
 - Waited for citation and existing bibliography refresh to finish after style changes before allowing bibliography commands, preventing overlapping document writes.

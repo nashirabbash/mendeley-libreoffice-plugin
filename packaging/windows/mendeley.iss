@@ -54,7 +54,7 @@ end;
 
 function GetPluginDir(Param: String): String;
 begin
-  Result := AddBackslash(PluginPage.Values[0]) + 'mendeley';
+  Result := AddBackslash(PluginPage.Values[0]) + '{BE5CBF95-C0AD-4842-B157-AC40FEDD9441}';
 end;
 
 function GetPluginsParent(Param: String): String;

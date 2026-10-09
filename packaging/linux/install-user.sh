@@ -5,6 +5,7 @@ SCRIPT_PATH="$(readlink -f "$0")"
 PACKAGE_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
 PLUGIN_SOURCE="${PACKAGE_ROOT}/plugin"
 HELPER="${PACKAGE_ROOT}/bin/mendeley-loopback-server"
+PLUGIN_GUID="{BE5CBF95-C0AD-4842-B157-AC40FEDD9441}"
 PLUGIN_NAME="mendeley"
 
 if [[ ! -x "$HELPER" || ! -d "$PLUGIN_SOURCE" ]]; then
@@ -35,10 +36,11 @@ if [[ ! "$selection" =~ ^[0-9]+$ ]] || ((selection < 1 || selection > ${#CANDIDA
     exit 1
 fi
 
-plugin_dir="${CANDIDATES[$((selection - 1))]}/${PLUGIN_NAME}"
+plugins_parent="${CANDIDATES[$((selection - 1))]}"
+plugin_dir="${plugins_parent}/${PLUGIN_GUID}"
 temp_dir="${plugin_dir}.new.$$"
 backup_dir="${plugin_dir}.backup.$$"
-mkdir -p "$(dirname "$plugin_dir")"
+mkdir -p "$plugins_parent"
 cp -R "$PLUGIN_SOURCE" "$temp_dir"
 if [[ -e "$plugin_dir" ]]; then
     mv "$plugin_dir" "$backup_dir"
@@ -48,6 +50,7 @@ if ! mv "$temp_dir" "$plugin_dir"; then
     exit 1
 fi
 rm -rf "$backup_dir"
+ln -sfn "$PLUGIN_GUID" "${plugins_parent}/${PLUGIN_NAME}" 2>/dev/null || true
 
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 CONFIG_DIR="$CONFIG_HOME/mendeley-onlyoffice"

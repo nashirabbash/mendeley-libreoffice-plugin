@@ -144,11 +144,33 @@ class LoopbackServerTests(unittest.TestCase):
         self.assertIsNone(
             SERVER.start_or_reuse_server("127.0.0.1", self.server.server_port, self.token_path)
         )
+
     def test_stop_command_stops_only_healthy_mendeley_helper(self):
         self.assertTrue(SERVER.stop_server(self.server.server_port))
         self.thread.join(timeout=2)
         self.assertFalse(self.thread.is_alive())
 
+    def test_auto_sync_from_mendeley_app_cookies(self):
+        import sqlite3
+        fake_cookie_dir = Path(self.temp_dir.name) / "config" / "Mendeley Reference Manager"
+        fake_cookie_dir.mkdir(parents=True, exist_ok=True)
+        fake_db = fake_cookie_dir / "Cookies"
+        con = sqlite3.connect(fake_db)
+        con.execute("CREATE TABLE cookies (name TEXT, value TEXT, encrypted_value BLOB)")
+        con.execute("INSERT INTO cookies VALUES ('accessToken', 'MS,fake-token-value-with-length-over-20', x'')")
+        con.commit()
+        con.close()
+
+        orig_environ = os.environ.get("XDG_CONFIG_HOME")
+        os.environ["XDG_CONFIG_HOME"] = str(Path(self.temp_dir.name) / "config")
+        try:
+            token = SERVER.get_token_from_mendeley_app()
+            self.assertEqual(token, "MS,fake-token-value-with-length-over-20")
+        finally:
+            if orig_environ is not None:
+                os.environ["XDG_CONFIG_HOME"] = orig_environ
+            else:
+                os.environ.pop("XDG_CONFIG_HOME", None)
 
 
 if __name__ == "__main__":

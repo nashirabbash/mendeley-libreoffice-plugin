@@ -58,12 +58,97 @@ def write_token(path, token):
             os.unlink(temporary_path)
 
 
+def _try_decrypt_windows_cookie(encrypted_value):
+    try:
+        import ctypes
+        import ctypes.wintypes
+
+        class DATA_BLOB(ctypes.Structure):
+            _fields_ = [
+                ("cbData", ctypes.wintypes.DWORD),
+                ("pbData", ctypes.POINTER(ctypes.c_char)),
+            ]
+
+        in_blob = DATA_BLOB(len(encrypted_value), ctypes.cast(ctypes.create_string_buffer(encrypted_value), ctypes.POINTER(ctypes.c_char)))
+        out_blob = DATA_BLOB()
+        if ctypes.windll.crypt32.CryptUnprotectData(ctypes.byref(in_blob), None, None, None, None, 0, ctypes.byref(out_blob)):
+            result = ctypes.string_at(out_blob.pbData, out_blob.cbData).decode("utf-8", "ignore")
+            ctypes.windll.kernel32.LocalFree(out_blob.pbData)
+            if result and len(result) > 20:
+                return result
+    except Exception:
+        pass
+    return None
+
+
+def get_token_from_mendeley_app():
+    import sqlite3
+    candidate_paths = []
+    if os.name == "nt":
+        appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        localappdata = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        candidate_paths.extend([
+            appdata / "Mendeley Reference Manager" / "Network" / "Cookies",
+            appdata / "Mendeley Reference Manager" / "Cookies",
+            localappdata / "Mendeley Reference Manager" / "Network" / "Cookies",
+            localappdata / "Mendeley Reference Manager" / "Cookies",
+        ])
+    elif sys.platform == "darwin":
+        app_support = Path.home() / "Library" / "Application Support"
+        candidate_paths.extend([
+            app_support / "Mendeley Reference Manager" / "Cookies",
+            app_support / "Mendeley Reference Manager" / "Network" / "Cookies",
+        ])
+    else:
+        config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        candidate_paths.extend([
+            config_home / "Mendeley Reference Manager" / "Cookies",
+            config_home / "Mendeley Reference Manager" / "Network" / "Cookies",
+            Path.home() / ".var" / "app" / "com.elsevier.MendeleyReferenceManager" / "config" / "Mendeley Reference Manager" / "Cookies",
+            Path.home() / ".var" / "app" / "com.elsevier.MendeleyReferenceManager" / "config" / "Mendeley Reference Manager" / "Network" / "Cookies",
+        ])
+
+    for cp in candidate_paths:
+        if not cp.is_file():
+            continue
+        try:
+            con = sqlite3.connect(f"file:{cp.as_posix()}?mode=ro", uri=True)
+            try:
+                cur = con.cursor()
+                cur.execute("SELECT value, encrypted_value FROM cookies WHERE name='accessToken'")
+                row = cur.fetchone()
+                if row:
+                    val, enc = row[0], row[1]
+                    if val and isinstance(val, str) and len(val) > 20:
+                        return val
+                    if os.name == "nt" and enc:
+                        decrypted = _try_decrypt_windows_cookie(enc)
+                        if decrypted:
+                            return decrypted
+            finally:
+                con.close()
+        except Exception:
+            continue
+    return None
+
+
 def read_token(path):
     try:
         with Path(path).open(encoding="utf-8") as token_file:
-            return json.load(token_file).get("token")
+            token = json.load(token_file).get("token")
+            if token:
+                return token
     except (OSError, ValueError, TypeError):
-        return None
+        pass
+    if Path(path) == token_file_path():
+        app_token = get_token_from_mendeley_app()
+        if app_token:
+            try:
+                write_token(path, app_token)
+            except Exception:
+                pass
+            return app_token
+    return None
 
 
 def clear_token(path):
