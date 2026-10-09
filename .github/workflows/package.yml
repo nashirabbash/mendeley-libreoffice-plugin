@@ -47,7 +47,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
-          path: dist/*
+          path: |
+            dist/*.deb
+            dist/*.rpm
 
   windows:
     strategy:
