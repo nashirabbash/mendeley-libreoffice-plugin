@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added Linux x86_64 LibreOffice Writer `.oxt` with Writer-only Mendeley sidebar, asynchronous bundled Node.js status worker, and checksum-verified Node.js packaging.
+- Connected Writer sidebar controls to Mendeley Desktop sessions and single-use-state OAuth; added reference search by title, author, or year, private Writer token storage, and logout.
 
 ## 1.1.1
 

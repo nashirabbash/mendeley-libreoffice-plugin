@@ -117,6 +117,47 @@ class LoopbackServerTests(unittest.TestCase):
         if os.name != "nt":
             self.assertEqual(self.token_path.stat().st_mode & 0o777, 0o600)
 
+
+    def test_writer_oauth_requires_matching_one_time_state_and_keeps_token_private(self):
+        writer_token_path = self.token_path.with_name("writer-token.json")
+        state = "writer-" + "a" * 48
+
+        def post(path, payload):
+            return Request(
+                self.base_url + path,
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json", "Origin": "null"},
+                method="POST",
+            )
+
+        with self.assertRaises(HTTPError) as absent_state:
+            urlopen(post("/writer/token", {"token": "forged-token"}))
+        self.assertEqual(absent_state.exception.code, 403)
+        absent_state.exception.close()
+        self.assertFalse(writer_token_path.exists())
+
+        with urlopen(post("/writer/state", {"state": state})) as response:
+            self.assertEqual(json.load(response), {"status": "ready"})
+        with self.assertRaises(HTTPError) as wrong_state:
+            urlopen(post("/writer/token", {"token": "forged-token", "state": "writer-" + "b" * 48}))
+        self.assertEqual(wrong_state.exception.code, 403)
+        wrong_state.exception.close()
+
+        with urlopen(post("/writer/token", {"token": "private-token", "state": state})) as response:
+            self.assertEqual(json.load(response), {"status": "ok"})
+        self.assertEqual(json.loads(writer_token_path.read_text())["token"], "private-token")
+        if os.name != "nt":
+            self.assertEqual(writer_token_path.stat().st_mode & 0o777, 0o600)
+
+        with self.assertRaises(HTTPError) as replayed_state:
+            urlopen(post("/writer/token", {"token": "replayed-token", "state": state}))
+        self.assertEqual(replayed_state.exception.code, 403)
+        replayed_state.exception.close()
+        self.assertEqual(json.loads(writer_token_path.read_text())["token"], "private-token")
+        with urlopen(Request(self.base_url + "/writer/token", headers={"Origin": "null"}, method="DELETE")) as response:
+            self.assertEqual(json.load(response), {"status": "cleared"})
+        self.assertFalse(writer_token_path.exists())
+
     def test_token_endpoint_rejects_unapproved_origin(self):
         request = Request(
             self.base_url + "/token",

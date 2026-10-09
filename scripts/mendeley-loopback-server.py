@@ -4,29 +4,36 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import argparse
-from threading import Thread
+from threading import Lock, Thread
 import os
 import sys
 from pathlib import Path
 import tempfile
 import time
 import urllib.parse
+import hmac
+import re
 
 HOST = "127.0.0.1"
 PORT = 8080
 SERVICE_NAME = "mendeley-loopback"
 HTML_CALLBACK = """<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>Mendeley Login Successful</title></head>
-<body><h2>Sign-In Successful</h2><p>Mendeley token received. You can now return to ONLYOFFICE.</p>
+<html><head><meta charset="UTF-8"><title>Mendeley Login Complete</title></head>
+<body><h2>Sign-In Complete</h2><p>Return to the Mendeley sidebar.</p>
 <script>
 (function () {
     var hash = new URLSearchParams(window.location.hash.slice(1));
     var search = new URLSearchParams(window.location.search);
     var token = hash.get("access_token") || search.get("code");
-    if (token) {
-        fetch("/token", { method: "POST", headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({token: token}) });
-    }
+    var state = hash.get("state") || search.get("state");
+    if (!token || !state) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    var writerFlow = state.indexOf("writer-") === 0;
+    fetch(writerFlow ? "/writer/token" : "/token", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token: token, state: state})
+    });
 })();
 </script></body></html>"""
 
@@ -261,6 +268,9 @@ def clear_token(path):
         pass
 
 def make_handler(token_path):
+    writer_token_path = Path(token_path).with_name("writer-token.json")
+    writer_state = None
+    writer_state_lock = Lock()
     class OAuthLoopbackHandler(BaseHTTPRequestHandler):
         def _approved_origin(self):
             origin = self.headers.get("Origin")
@@ -339,6 +349,8 @@ def make_handler(token_path):
                 self._send_json(200, {"service": SERVICE_NAME, "status": "ok"})
             elif path == "/token":
                 self._send_json(200, {"token": read_token(token_path)})
+            elif path == "/writer/token":
+                self._send_json(200, {"token": read_token(writer_token_path)})
             elif path == "/" or path == "/callback":
                 body = HTML_CALLBACK.encode("utf-8")
                 self.send_response(200)
@@ -351,6 +363,7 @@ def make_handler(token_path):
                 self._send_json(404, {"error": "not_found"})
 
         def do_POST(self):
+            nonlocal writer_state
             if not self._approved_host() or not self._approved_origin():
                 self._reject_request()
                 return
@@ -358,6 +371,45 @@ def make_handler(token_path):
             if path == "/shutdown":
                 self._send_json(200, {"status": "stopping"})
                 Thread(target=self.server.shutdown, daemon=True).start()
+                return
+            if path == "/writer/state":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 1024:
+                        raise ValueError("invalid state")
+                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                    state = payload.get("state") if isinstance(payload, dict) else None
+                    if not isinstance(state, str) or re.fullmatch(r"writer-[a-f0-9]{48}", state) is None:
+                        raise ValueError("invalid state")
+                    clear_token(writer_token_path)
+                    with writer_state_lock:
+                        writer_state = state
+                    self._send_json(200, {"status": "ready"})
+                except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                    self._send_json(400, {"error": "invalid_state"})
+                return
+            if path == "/writer/token":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 16384:
+                        raise ValueError("invalid token")
+                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                    token = payload.get("token") if isinstance(payload, dict) else None
+                    state = payload.get("state") if isinstance(payload, dict) else None
+                    if not isinstance(token, str) or not token or len(token) > 8192:
+                        raise ValueError("invalid token")
+                    if not isinstance(state, str) or re.fullmatch(r"writer-[a-f0-9]{48}", state) is None:
+                        state = None
+                    with writer_state_lock:
+                        if not writer_state or not state or not hmac.compare_digest(writer_state, state):
+                            self._send_json(403, {"error": "invalid_state"})
+                            return
+                        writer_state = None
+                    write_token(writer_token_path, token)
+                    print(json.dumps({"level": "success", "event": "writer.oauth.callback_accepted"}), flush=True)
+                    self._send_json(200, {"status": "ok"})
+                except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                    self._send_json(400, {"error": "invalid_token_payload"})
                 return
             if path != "/token":
                 self._send_json(404, {"error": "not_found"})
@@ -378,14 +430,21 @@ def make_handler(token_path):
                 self._send_json(400, {"error": "invalid_token_payload"})
 
         def do_DELETE(self):
+            nonlocal writer_state
             if not self._approved_host() or not self._approved_origin():
                 self._reject_request()
                 return
-            if urllib.parse.urlparse(self.path).path != "/token":
+            path = urllib.parse.urlparse(self.path).path
+            if path == "/writer/token":
+                clear_token(writer_token_path)
+                with writer_state_lock:
+                    writer_state = None
+                self._send_json(200, {"status": "cleared"})
+            elif path == "/token":
+                clear_token(token_path)
+                self._send_json(200, {"status": "cleared"})
+            else:
                 self._send_json(404, {"error": "not_found"})
-                return
-            clear_token(token_path)
-            self._send_json(200, {"status": "cleared"})
         def log_message(self, format, *args):
             print(json.dumps({"level": "info", "event": "http.request", "data": {"message": format % args}}), flush=True)
 
