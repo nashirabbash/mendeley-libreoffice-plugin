@@ -11,6 +11,8 @@
 - Removed phantom `docsThumb` spacer div that caused empty blank space below list and resolved self-lockout in debounce timer.
 - Fixed OAuth token handling: robust parameter parsing in `oauth.html`, automatic 401 session reset, eliminated duplicate startup calls, and prevented stale token lockout.
 - Fixed "Insert Bibliography" detection: query both `GetAllAddinFields` and `GetAllContentControls` in ONLYOFFICE, add lazy adapter binding, and implement fallback text scanner matching Mendeley library documents.
+- Switched citations to native inline Content Controls (`AddContentControl` type 2) with visible bounding block/brackets instead of Addin Field hover shading.
+- Fixed bibliography rendering: wrap bibliography in block Content Control (`AddContentControl` type 1) and use `PasteHtml` to render rich typography (italics, formatting) without raw `<div class="csl-entry">` tags.
 
 ## 1.0.0
 - Initial release

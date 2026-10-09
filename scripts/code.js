@@ -1783,13 +1783,25 @@
     }
 
     function insertInDocument(html) {
-        if (html) {
-            documentModule.insertBibliography(html).catch(function(err) {
-                showError("Failed to insert bibliography: " + (err.message || err));
-            });
-        } else {
+        if (!html) {
             showError(getMessage("Bibliography cannot be created with selected style"));
+            return;
         }
+        var rawHtml = (html && html.join) ? html.join("") : String(html || "");
+        documentModule.getBibliography().then(function(bibRecord) {
+            if (bibRecord && bibRecord.internalId) {
+                return documentModule.updateBibliographyHtml(bibRecord.internalId, rawHtml);
+            } else {
+                return documentModule.insertBibliography(rawHtml);
+            }
+        }).catch(function(err) {
+            console.warn("insertBibliography failed, falling back to PasteHtml:", err);
+            try {
+                window.Asc.plugin.executeMethod("PasteHtml", [rawHtml]);
+            } catch (e) {
+                showError("Failed to insert bibliography: " + (err.message || err));
+            }
+        });
     }
 
     function refreshDocumentCitations() {

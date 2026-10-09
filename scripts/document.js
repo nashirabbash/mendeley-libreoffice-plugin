@@ -75,6 +75,18 @@
         log("info", "InMemoryAdapter.addAddinField", { internalId: control.internalId, tag: tag });
         return Promise.resolve(control.internalId);
     };
+    InMemoryAdapter.prototype.addContentControl = function (type, properties, content, isHtml) {
+        var control = {
+            internalId: "inmem_ctrl_" + this.nextId++,
+            tag: properties.Tag || "",
+            text: isHtml ? String(content || "").replace(/<[^>]+>/g, "") : (content || ""),
+            html: content || "",
+            type: type
+        };
+        this.controls.push(control);
+        log("info", "InMemoryAdapter.addContentControl", { internalId: control.internalId, tag: control.tag });
+        return Promise.resolve(control.internalId);
+    };
 
     InMemoryAdapter.prototype.addFootnote = function () {
         this.footnotesCount++;
@@ -217,6 +229,25 @@
         });
     };
 
+    OnlyOfficeAdapter.prototype.addContentControl = function (type, properties, content, isHtml) {
+        return new Promise(function (resolve) {
+            if (typeof window === "undefined" || !window.Asc || !window.Asc.plugin) {
+                log("error", "OnlyOfficeAdapter.missingPlugin", {});
+                resolve("");
+                return;
+            }
+            // AddContentControl: type 1 = Block, type 2 = Inline
+            window.Asc.plugin.executeMethod("AddContentControl", [type, properties], function (ctrl) {
+                var method = isHtml ? "PasteHtml" : "PasteText";
+                window.Asc.plugin.executeMethod(method, [content], function () {
+                    var id = ctrl ? (ctrl.InternalId || ctrl.Id || "") : "";
+                    log("info", "OnlyOfficeAdapter.addContentControl", { type: type, tag: properties.Tag, id: id });
+                    resolve(id);
+                });
+            });
+        });
+    };
+
     OnlyOfficeAdapter.prototype.addAddinField = function (field) {
         return new Promise(function (resolve) {
             if (typeof window === "undefined" || !window.Asc || !window.Asc.plugin) {
@@ -343,6 +374,9 @@
         var op = isNoteStyle ? self.adapter.addFootnote() : Promise.resolve();
 
         return op.then(function () {
+            if (self.adapter && self.adapter.addContentControl) {
+                return self.adapter.addContentControl(2, { Tag: base64Tag, Lock: 0 }, cleanText, false);
+            }
             return self.adapter.addAddinField(addinField);
         }).then(function (result) {
             log("success", "DocumentModule.insertCitation", { citationId: citationObj.citationId, isNoteStyle: !!isNoteStyle });
@@ -411,6 +445,13 @@
 
     DocumentModule.prototype.insertBibliography = function (html) {
         var rawHtml = (html && html.join) ? html.join("") : String(html || "");
+        var self = this;
+        if (self.adapter && self.adapter.addContentControl) {
+            return self.adapter.addContentControl(1, { Tag: BIB_TAG, Lock: 0 }, rawHtml, true).then(function (res) {
+                log("success", "DocumentModule.insertBibliography", {});
+                return res;
+            });
+        }
         var addinBibField = {
             FieldId: "",
             Value: "ITEM " + BIB_TAG,
