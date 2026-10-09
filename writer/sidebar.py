@@ -14,8 +14,11 @@ FACTORY_SERVICE = "com.sun.star.ui.UIElementFactory"
 PANEL_URL = "private:resource/toolpanel/MendeleyWriterFactory/MendeleyWriterPanel"
 
 
-def log_event(level, event):
-    print(json.dumps({"level": level, "event": event}), file=sys.stderr, flush=True)
+def log_event(level, event, data=None):
+    record = {"level": level, "event": event}
+    if data:
+        record["data"] = data
+    print(json.dumps(record), file=sys.stderr, flush=True)
 
 
 class StatusCallback(unohelper.Base, XCallback):
@@ -62,6 +65,8 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
         node = os.path.join(extension_root, "runtime", "node", "bin", "node")
         worker = os.path.join(extension_root, "worker.js")
         try:
+            os.chmod(node, 0o755)
+            log_event("debug", "writer.worker.executable_ready")
             result = subprocess.run(
                 [node, worker],
                 input='{"command":"status"}\n',
@@ -77,9 +82,9 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
                 raise RuntimeError("Worker returned unexpected status")
             message = "Mendeley worker ready."
             log_event("success", "writer.worker.ready")
-        except Exception:
+        except Exception as error:
             message = "Mendeley worker unavailable. Reinstall extension or restore bundled Node.js."
-            log_event("error", "writer.worker.unavailable")
+            log_event("error", "writer.worker.unavailable", {"error": str(error), "node": node})
 
         self.callback.addCallback(self.status_callback, message)
 

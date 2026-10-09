@@ -16,6 +16,7 @@ temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
 cp -R "$ROOT/writer/." "$temp_dir/"
 mkdir -p "$temp_dir/runtime/node/bin" "$temp_dir/resources"
+rm -f "$temp_dir/runtime/node/bin/node"
 install -m 0755 "$NODE_BIN" "$temp_dir/runtime/node/bin/node"
 install -m 0644 "$NODE_LICENSE" "$temp_dir/runtime/node/LICENSE"
 install -m 0644 "$ROOT/resources/light/icon.png" "$temp_dir/resources/icon.png"
