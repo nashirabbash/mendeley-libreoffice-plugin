@@ -1,196 +1,88 @@
-# ONLYOFFICE Mendeley Plugin
+# Mendeley for ONLYOFFICE
 
-> Fork of [ONLYOFFICE/plugin-mendeley](https://github.com/ONLYOFFICE/plugin-mendeley) — extended with a Document seam, auth hardening, infinite scroll fix, and a unit-testable architecture.
+Search your Mendeley library and add formatted citations and bibliographies to documents in ONLYOFFICE Document Editor.
 
-Mendeley plugin lets users search their Mendeley library and insert formatted citations and bibliographies directly into ONLYOFFICE Document Editor.
+![Workflow for installing the Mendeley plugin, connecting a Mendeley account, and adding references in ONLYOFFICE](docs/images/mendeley-workflow.png)
 
----
 
-## What's different from upstream
+## Features
 
-| Area | Change |
-|---|---|
-| **Document seam** | `scripts/document.js` — deep module wrapping all ONLYOFFICE content-control operations behind a clean interface. Enables unit tests without a live Document Server. |
-| **Auth** | Robust OAuth callback (`oauth.html`), stale-token cleared on new login, automatic session reset on 401, unified startup with no duplicate API calls. |
-| **Infinite scroll** | Targets the real scrollable `#docsWrapper` container with a threshold check and native `scroll` events. Removes the phantom spacer div that caused blank space below the list. |
-| **UI** | All emojis and text arrows replaced with scalable SVG icons across menus, toolbars, and drawers. |
-| **Tests** | Node.js suites cover document behavior, scroll thresholds, and multi-page reference loading. |
-| **Agent docs** | `AGENTS.md`, `CODING_STANDARDS.md`, `CONTEXT.md`, `docs/adr/` for AI-assisted development. |
-
----
+- Search references by title, author, or year.
+- Browse collections, favorites, and recently added references.
+- Insert in-text citations and bibliographies using citation styles such as APA, Chicago, and Harvard.
+- Edit existing citations or unlink citations from a document.
 
 ## Requirements
 
-- **ONLYOFFICE Desktop Editors** (recommended) or Document Server
-- **Mendeley account** — [mendeley.com](https://www.mendeley.com)
-- **Mendeley OAuth app** — register at [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html)
-- **Node.js** (only for running tests)
+- ONLYOFFICE Desktop Editors or a self-hosted ONLYOFFICE Document Server.
+- A Mendeley account.
+- A Mendeley OAuth application and its Client ID.
 
----
+## Install in ONLYOFFICE Desktop Editors
 
-## Installation
+Install ONLYOFFICE Desktop Editors first. Download the installer for your operating system from the [project releases](https://github.com/nashirabbash/plugin-mendeley/releases). These packages install the Mendeley plugin and its local helper; they do not install ONLYOFFICE.
 
-### Option A — ONLYOFFICE Desktop Editors
+### Linux
 
-Install ONLYOFFICE Desktop Editors first. These packages add the Mendeley plugin and helper; they do not install or replace ONLYOFFICE.
-
-#### Linux
-
-Install the matching `.deb` or `.rpm` package for Linux x64 or ARM64. Then run:
+Install the matching `.deb` or `.rpm` package, then run:
 
 ```bash
 mendeley-onlyoffice-setup
 ```
 
-Choose the ONLYOFFICE installation shown. Setup copies the plugin into that user's plugin directory, adds a per-user XDG Autostart entry, and starts helper immediately. It starts again at next login; no Python install or manual server command is needed.
+Choose your ONLYOFFICE installation when prompted. The setup installs the plugin for your user and starts the helper. The helper starts again when you next log in.
 
-Run `mendeley-onlyoffice-remove` before removing the package to delete the selected plugin, autostart entry, running helper, and local token.
+Before removing the package, run `mendeley-onlyoffice-remove` to remove the plugin, autostart entry, helper, and local token.
 
-#### Windows
+### Windows
 
-Run `Mendeley-ONLYOFFICE-Setup.exe`, choose the ONLYOFFICE plugin directory, and finish setup. The helper starts immediately and at user login through `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`.
+Run `Mendeley-ONLYOFFICE-Setup.exe` and select your ONLYOFFICE plugin directory. The helper starts after setup and at your next sign-in.
 
-#### Launch ONLYOFFICE
+Open ONLYOFFICE Desktop Editors and select **Plugins**. Mendeley should appear in the plugin list.
 
-Open existing ONLYOFFICE Desktop Editors. Mendeley appears in the **Plugins** tab. Installers target x64 and ARM64. OAuth keeps fixed `127.0.0.1:8080`; an existing Mendeley helper is reused. If another application owns the port, login reports conflict.
+## Install in ONLYOFFICE Document Server
 
-
----
-
-### Option B — ONLYOFFICE Document Server (self-hosted)
-
-#### 1. Copy plugin files to the server
+For a self-hosted Document Server, install the plugin in the server's `sdkjs-plugins` directory. For a typical Linux installation:
 
 ```bash
-# Linux (adjust path for your Document Server version)
-sudo cp -r plugin-mendeley /var/www/onlyoffice/documentserver/sdkjs-plugins/
+sudo cp -r plugin-mendeley /var/www/onlyoffice/documentserver/sdkjs-plugins/mendeley
 ```
 
-No service restart required.
+Adjust the source and destination paths for your checkout and Document Server installation. If your server requires a specific plugin URL or configuration, add the plugin through your Document Server integration settings. The plugin GUID is `asc.{BE5CBF95-C0AD-4842-B157-AC40FEDD9441}`.
 
-#### 2. (Alternative) Add via Document Server config
+## Connect your Mendeley account
 
-```js
-var docEditor = new DocsAPI.DocEditor("placeholder", {
-    editorConfig: {
-        plugins: {
-            autostart: [
-                "asc.{BE5CBF95-C0AD-4842-B157-AC40FEDD9441}"
-            ],
-            pluginsData: [
-                "https://example.com/path/to/plugin-mendeley/config.json"
-            ]
-        }
-    }
-});
-```
-
----
-
-## Mendeley App Configuration
-
-The plugin requires a registered Mendeley OAuth application.
-
-1. Go to [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html) and create a new app.
-
-2. Set the **Redirect URI** to the URL shown in the plugin's Config screen:
+1. Create an OAuth application on [Mendeley's application page](https://dev.mendeley.com/myapps.html).
+2. Set its redirect URI to the address shown on the plugin's **Config** screen. Common values:
    - Desktop Editors: `http://localhost:8080/`
-   - Document Server: `https://your-server/path/to/oauth.html`
+   - Document Server: the HTTPS URL for the plugin's `oauth.html` page on your server.
+3. Copy the application's Client ID.
+4. Open Mendeley in ONLYOFFICE, select **Config**, enter the Client ID, and save.
+5. Select **Login** and authorize access in the browser window. Your Mendeley library loads after authorization.
 
-3. Copy your **Client ID** (App ID).
+## Use the plugin
 
-4. Open the plugin, go to the **Config** tab, paste the Client ID, and save.
+1. Place the document cursor where you want the citation.
+2. Find references using search, collections, **Favorites**, or **Recently Added**.
+3. Select one or more references.
+4. Choose citation style and language.
+5. Select **Insert citation** to add an in-text citation.
+6. Select **Insert bibliography** to add the reference list at the end of the document.
+7. Select the pencil icon beside a citation to edit it. Select **Unlink all** to convert citations to plain text.
 
-5. Click **Login** — a browser window opens for Mendeley OAuth. After authorising, the plugin loads your library automatically.
+## Troubleshooting
 
----
-
-## How to use
-
-1. **Search** your Mendeley library by title, author, or year using the search bar.
-
-2. **Filter** by collection using the drawer on the left, or switch to **Favorites** or **Recently Added**.
-
-3. **Select** one or more references by checking the checkboxes.
-
-4. **Choose** a citation style (e.g. APA, Chicago, Harvard) and language from the dropdowns.
-
-5. Click **Insert citation** — the formatted in-text citation is inserted at the cursor position.
-
-6. Click **Insert bibliography** to add the full reference list at the end of the document.
-
-7. To edit an existing citation, click its **pencil icon** in the sidebar.
-
-8. To remove all citations and convert them to plain text, click **Unlink all**.
-
----
-
-## Running tests
-
-No test framework needed — plain Node.js:
-
-```bash
-node tests/document.test.js
-node tests/scroll.test.js
-node tests/library-pagination.test.js
-```
-
-All suites print pass/fail and exit with code 0 on success.
-
-
-## Project structure
-
-```
-plugin-mendeley/
-├── config.json               # Plugin manifest (GUID, name, version)
-├── index.html                # Plugin UI entry point
-├── oauth.html                # OAuth implicit-flow callback page
-├── scripts/
-│   ├── code.js               # Main plugin logic (auth, library, citations)
-│   ├── document.js           # Document seam module (testable, no runtime dep)
-│   ├── citeproc/             # citeproc-js citation processor
-│   ├── mendeley-sdk/         # Mendeley JS SDK
-│   └── thirdparty/           # fetch, promise, URL polyfills
-├── tests/
-│   ├── document.test.js      # Unit tests for DocumentModule + InMemoryAdapter
-│   ├── library-pagination.test.js # Multi-page reference loading through scroll
-│   └── scroll.test.js        # Unit tests for infinite scroll logic
-├── resources/
-│   ├── css/plugin_style.css
-│   └── img/ light/ dark/     # Icons
-├── translations/             # i18n JSON files
-├── vendor/v1/                # Vendored ONLYOFFICE plugin UI assets
-├── docs/adr/                 # Architecture Decision Records
-├── AGENTS.md                 # Rules for AI agents working in this repo
-├── CODING_STANDARDS.md       # Coding conventions
-└── CONTEXT.md                # Domain glossary
-```
-
----
-
-## Known issues
-
-**CentOS with SELinux enabled** — after copying to `sdkjs-plugins`, plugins may fail due to file security context. Fix:
+On CentOS with SELinux enabled, the server may block plugin files after installation. Restore the security context and restart the Document Server document service:
 
 ```bash
 sudo restorecon -Rv /var/www/onlyoffice/documentserver/sdkjs-plugins/
 sudo supervisorctl restart ds:docservice
 ```
 
----
+If Mendeley login reports that port `127.0.0.1:8080` is in use, another application is using the port required by the local helper.
 
-## Upstream
+## Open source
 
-This repo is a fork of [ONLYOFFICE/plugin-mendeley](https://github.com/ONLYOFFICE/plugin-mendeley).  
-To pull upstream changes:
+This project is a fork of [ONLYOFFICE/plugin-mendeley](https://github.com/ONLYOFFICE/plugin-mendeley). It is distributed under the [Apache License 2.0](LICENSE).
 
-```bash
-git fetch upstream
-git merge upstream/master
-```
-
----
-
-## License
-
-Apache 2.0 — see [LICENSE](LICENSE).
+Bug reports and contributions are welcome through the repository's [issue tracker](https://github.com/nashirabbash/plugin-mendeley/issues).
