@@ -17,7 +17,7 @@ PORT = 8080
 SERVICE_NAME = "mendeley-loopback"
 HTML_CALLBACK = """<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>Mendeley Login Successful</title></head>
-<body><h2>Login Berhasil</h2><p>Token Mendeley diterima. Kembali ke ONLYOFFICE.</p>
+<body><h2>Sign-In Successful</h2><p>Mendeley token received. You can now return to ONLYOFFICE.</p>
 <script>
 (function () {
     var hash = new URLSearchParams(window.location.hash.slice(1));

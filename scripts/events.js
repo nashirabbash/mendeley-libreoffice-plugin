@@ -43,7 +43,7 @@
                 }, function () {
                     if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
                     if (Helpers && Helpers.showError) {
-                        Helpers.showError("Mendeley Desktop belum terdeteksi. Buka aplikasi Mendeley Reference Manager dan pastikan sudah login, lalu klik tombol ini lagi.");
+                        Helpers.showError("Mendeley Desktop app was not detected. Please make sure Mendeley Reference Manager is running and signed in, then try again.");
                     }
                 });
             }

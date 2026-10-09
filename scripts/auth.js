@@ -23,17 +23,17 @@
                 return;
             }
             fetch("http://127.0.0.1:8080/health").then(function (response) {
-                if (!response.ok) throw new Error("Mendeley Helper tidak merespons pada port 8080.");
+                if (!response.ok) throw new Error("Mendeley Helper is not responding on port 8080.");
                 return response.json().catch(function () {
-                    throw new Error("Port 8080 tidak menjalankan Mendeley Helper. Tutup aplikasi lain yang memakai port tersebut, lalu coba lagi.");
+                    throw new Error("Port 8080 is not running the Mendeley Helper. Close any other application using this port and try again.");
                 });
             }).then(function (health) {
                 if (!health || health.service !== "mendeley-loopback" || health.status !== "ok") {
-                    throw new Error("Port 8080 dipakai aplikasi lain. Tutup aplikasi tersebut, lalu coba lagi.");
+                    throw new Error("Port 8080 is used by another application. Close it and try again.");
                 }
                 return fetch("http://127.0.0.1:8080/token", { method: "DELETE" });
             }).then(function (response) {
-                if (!response.ok) throw new Error("Tidak dapat menyiapkan Mendeley Helper untuk login.");
+                if (!response.ok) throw new Error("Could not prepare Mendeley Helper for sign-in.");
                 startAuthentication();
             }).catch(function (error) {
                 if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
@@ -41,7 +41,7 @@
                     Logger.error("Auth.loopback.unavailable", { error: String(error) });
                 }
                 var message = /fetch|network/i.test(error.message || "")
-                    ? "Mendeley Helper tidak berjalan atau port 8080 dipakai aplikasi lain."
+                    ? "Mendeley Helper is not running or port 8080 is in use."
                     : error.message;
                 if (Helpers && Helpers.showError) Helpers.showError(message);
             });
@@ -84,7 +84,7 @@
             }
             fetch("http://127.0.0.1:8080/token")
                 .then(function (response) {
-                    if (!response.ok) throw new Error("Mendeley Helper tidak dapat membaca token.");
+                    if (!response.ok) throw new Error("Mendeley Helper could not retrieve the token.");
                     return response.json();
                 })
                 .then(function (data) {
