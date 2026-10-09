@@ -35,6 +35,10 @@ This plugin brings a Mendeley Cite-style workflow to ONLYOFFICE on Linux, so you
 - [Mendeley Reference Manager](https://www.mendeley.com/reference-management/mendeley-reference-manager) installed and signed in (for automatic zero-config connect).
 - *(Optional fallback)*: A Mendeley developer OAuth application ID if connecting manually via web OAuth.
 
+### LibreOffice Writer
+
+The Linux x86_64 `.oxt` installs a Mendeley sidebar in Writer 7.5 or newer and bundles Node.js 22.20.0. No system Node.js installation is required. Download `mendeley-writer-linux-x86_64.oxt` from [Releases](https://github.com/nashirabbash/mendeley-libreoffice-plugin/releases) and install it through **Tools → Extensions**. The sidebar reports bundled worker startup failures without blocking Writer.
+
 ### ONLYOFFICE Desktop Editors
 
 Install ONLYOFFICE Desktop Editors first. You can install the Mendeley plugin and its local background helper using any of the methods below:
