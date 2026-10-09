@@ -45,6 +45,7 @@ chmod 600 "$HOME/.config/autostart/mendeley-loopback.desktop"
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user daemon-reload 2>/dev/null || true
     systemctl --user enable --now mendeley-loopback.service 2>/dev/null || true
+    systemctl --user restart mendeley-loopback.service 2>/dev/null || true
 fi
 
 # Fallback if systemd user session is inactive

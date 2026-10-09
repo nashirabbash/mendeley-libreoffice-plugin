@@ -15,6 +15,7 @@ mkdir -p "$(dirname "$OUTPUT")"
 temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
 cp -R "$ROOT/writer/." "$temp_dir/"
+install -m 0644 "$ROOT/scripts/mendeley-loopback-server.py" "$temp_dir/loopback-server.py"
 mkdir -p "$temp_dir/runtime/node/bin" "$temp_dir/resources"
 rm -f "$temp_dir/runtime/node/bin/node"
 install -m 0755 "$NODE_BIN" "$temp_dir/runtime/node/bin/node"
