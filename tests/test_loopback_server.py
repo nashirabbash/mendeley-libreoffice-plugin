@@ -172,6 +172,23 @@ class LoopbackServerTests(unittest.TestCase):
             else:
                 os.environ.pop("XDG_CONFIG_HOME", None)
 
+    def test_auto_sync_from_cache_storage(self):
+        fake_cache_dir = Path(self.temp_dir.name) / "config" / "Mendeley Reference Manager" / "Service Worker" / "CacheStorage" / "dummy"
+        fake_cache_dir.mkdir(parents=True, exist_ok=True)
+        fake_cache_file = fake_cache_dir / "cache_data_0"
+        fake_cache_file.write_bytes(b"Header data Bearer MSwx_fake_cached_token_1234567890_value Trailer data")
+
+        orig_environ = os.environ.get("XDG_CONFIG_HOME")
+        os.environ["XDG_CONFIG_HOME"] = str(Path(self.temp_dir.name) / "config")
+        try:
+            token = SERVER.get_token_from_mendeley_app()
+            self.assertEqual(token, "MSwx_fake_cached_token_1234567890_value")
+        finally:
+            if orig_environ is not None:
+                os.environ["XDG_CONFIG_HOME"] = orig_environ
+            else:
+                os.environ.pop("XDG_CONFIG_HOME", None)
+
 
 if __name__ == "__main__":
     unittest.main()

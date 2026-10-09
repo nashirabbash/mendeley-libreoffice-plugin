@@ -85,6 +85,38 @@
             }
         });
     }
+    var desktopPollTimer = null;
+    var isManualLogout = false;
+
+    function startDesktopPolling() {
+        if (desktopPollTimer) return;
+        desktopPollTimer = setInterval(function () {
+            if (isManualLogout) return;
+            var current = Auth.getCurrentAuthState && Auth.getCurrentAuthState();
+            if (current === "main") {
+                stopDesktopPolling();
+                return;
+            }
+            tryAutoConnectDesktop(function (token) {
+                stopDesktopPolling();
+                window._activeMendToken = token;
+                if (typeof localStorage !== "undefined") localStorage.setItem("mendToken", token);
+                Auth.switchAuthState("main");
+                LibraryView.loadFilteredLibrary(false);
+            });
+        }, 1500);
+    }
+
+    function stopDesktopPolling() {
+        if (desktopPollTimer) {
+            clearInterval(desktopPollTimer);
+            desktopPollTimer = null;
+        }
+    }
+
+    App.startDesktopPolling = startDesktopPolling;
+    App.stopDesktopPolling = stopDesktopPolling;
+    App.setManualLogout = function (val) { isManualLogout = val; };
 
     // Direct exports for module interoperability
     App.loadFilteredLibrary = LibraryView.loadFilteredLibrary;
@@ -226,6 +258,7 @@
             }, function () {
                 var hasMend = (window.Asc.plugin.mendeley || Helpers.getSettings());
                 Auth.switchAuthState(hasMend ? "login" : "config");
+                startDesktopPolling();
             });
         }
 

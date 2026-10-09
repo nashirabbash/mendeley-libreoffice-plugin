@@ -81,54 +81,157 @@ def _try_decrypt_windows_cookie(encrypted_value):
     return None
 
 
-def get_token_from_mendeley_app():
-    import sqlite3
-    candidate_paths = []
-    if os.name == "nt":
-        appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        localappdata = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        candidate_paths.extend([
-            appdata / "Mendeley Reference Manager" / "Network" / "Cookies",
-            appdata / "Mendeley Reference Manager" / "Cookies",
-            localappdata / "Mendeley Reference Manager" / "Network" / "Cookies",
-            localappdata / "Mendeley Reference Manager" / "Cookies",
-        ])
-    elif sys.platform == "darwin":
-        app_support = Path.home() / "Library" / "Application Support"
-        candidate_paths.extend([
-            app_support / "Mendeley Reference Manager" / "Cookies",
-            app_support / "Mendeley Reference Manager" / "Network" / "Cookies",
-        ])
-    else:
-        config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-        candidate_paths.extend([
-            config_home / "Mendeley Reference Manager" / "Cookies",
-            config_home / "Mendeley Reference Manager" / "Network" / "Cookies",
-            Path.home() / ".var" / "app" / "com.elsevier.MendeleyReferenceManager" / "config" / "Mendeley Reference Manager" / "Cookies",
-            Path.home() / ".var" / "app" / "com.elsevier.MendeleyReferenceManager" / "config" / "Mendeley Reference Manager" / "Network" / "Cookies",
-        ])
+def find_mendeley_storage_paths():
+    dirs = []
+    seen = set()
 
-    for cp in candidate_paths:
-        if not cp.is_file():
-            continue
+    def add_dir(p):
         try:
-            con = sqlite3.connect(f"file:{cp.as_posix()}?mode=ro", uri=True)
-            try:
-                cur = con.cursor()
-                cur.execute("SELECT value, encrypted_value FROM cookies WHERE name='accessToken'")
-                row = cur.fetchone()
-                if row:
-                    val, enc = row[0], row[1]
-                    if val and isinstance(val, str) and len(val) > 20:
-                        return val
-                    if os.name == "nt" and enc:
-                        decrypted = _try_decrypt_windows_cookie(enc)
-                        if decrypted:
-                            return decrypted
-            finally:
-                con.close()
+            p = Path(p).resolve()
+            if p.is_dir() and str(p) not in seen:
+                seen.add(str(p))
+                dirs.append(p)
         except Exception:
-            continue
+            pass
+
+    #Dynamic user data dir via env var
+    env_custom = os.environ.get("MENDELEY_USER_DATA_DIR")
+    if env_custom:
+        add_dir(env_custom)
+
+    #Standard config roots per operating system
+    home = Path.home()
+    if os.name == "nt":
+        appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
+        localappdata = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+        for base in [appdata, localappdata]:
+            add_dir(base / "Mendeley Reference Manager")
+            add_dir(base / "mendeley-reference-manager")
+        pkg_root = localappdata / "Packages"
+        if pkg_root.is_dir():
+            try:
+                for p in pkg_root.glob("*Mendeley*"):
+                    add_dir(p / "LocalCache" / "Roaming" / "Mendeley Reference Manager")
+            except Exception:
+                pass
+    elif sys.platform == "darwin":
+        app_support = home / "Library" / "Application Support"
+        add_dir(app_support / "Mendeley Reference Manager")
+        add_dir(home / "Library" / "Containers" / "com.elsevier.MendeleyReferenceManager" / "Data" / "Library" / "Application Support" / "Mendeley Reference Manager")
+    else:
+        xdg_config = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
+        add_dir(xdg_config / "Mendeley Reference Manager")
+        add_dir(home / ".config" / "Mendeley Reference Manager")
+
+    #Dynamic process inspection on Linux proc
+    if os.path.isdir("/proc"):
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            try:
+                cmdline_path = os.path.join("/proc", pid, "cmdline")
+                with open(cmdline_path, "rb") as f:
+                    raw = f.read()
+                if b"mendeley" in raw.lower() or b"Mendeley" in raw:
+                    for arg in raw.split(b"\x00"):
+                        text = arg.decode("utf-8", "ignore")
+                        if text.startswith("--user-data-dir="):
+                            add_dir(text.split("=", 1)[1])
+            except Exception:
+                pass
+
+    #Additional package environments for Linux
+    if os.name != "nt" and sys.platform != "darwin":
+        add_dir(home / ".var" / "app" / "com.elsevier.MendeleyReferenceManager" / "config" / "Mendeley Reference Manager")
+        add_dir(home / "snap" / "mendeley-reference-manager" / "current" / ".config" / "Mendeley Reference Manager")
+        add_dir(home / "snap" / "mendeley-reference-manager" / "common" / ".config" / "Mendeley Reference Manager")
+
+    return dirs
+
+
+def _extract_token_from_cookies(cookie_file):
+    import sqlite3
+    try:
+        con = sqlite3.connect(f"file:{cookie_file.as_posix()}?mode=ro", uri=True)
+        try:
+            cur = con.cursor()
+            cur.execute("SELECT name, value, encrypted_value FROM cookies")
+            rows = cur.fetchall()
+        finally:
+            con.close()
+
+        cookie_parts = []
+        for name, val, enc in rows:
+            if not val and os.name == "nt" and enc:
+                val = _try_decrypt_windows_cookie(enc)
+            if val and isinstance(val, str):
+                if name == "accessToken" and len(val) > 20:
+                    return val
+                cookie_parts.append(f"{name}={val}")
+
+        if not cookie_parts:
+            return None
+
+        cookie_header = "; ".join(cookie_parts)
+        req = urllib.request.Request(
+            "https://www.mendeley.com/reference-manager-desktop/refresh-token",
+            data=b"{}",
+            headers={
+                "Content-Type": "application/json",
+                "Cookie": cookie_header,
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) MendeleyReferenceManager/2.145.0 Chrome/144.0.7559.220 Electron/40.6.1 Safari/537.36"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                tok = data.get("access_token") or data.get("accessToken") or data.get("token")
+                if tok and isinstance(tok, str) and len(tok) > 20:
+                    return tok
+    except Exception:
+        pass
+    return None
+
+
+def _extract_token_from_cache(cfg_dir):
+    import re
+    cache_dir = Path(cfg_dir) / "Service Worker" / "CacheStorage"
+    if not cache_dir.is_dir():
+        return None
+    token_pattern = re.compile(rb"Bearer\s+([A-Za-z0-9_\-\.\+=]{20,})")
+    for root, dirs, files in os.walk(cache_dir):
+        for f in files:
+            p = os.path.join(root, f)
+            try:
+                with open(p, "rb") as fp:
+                    content = fp.read()
+                    m = token_pattern.search(content)
+                    if m:
+                        tok = m.group(1).decode("ascii")
+                        if len(tok) > 20:
+                            return tok
+            except Exception:
+                pass
+    return None
+
+
+def get_token_from_mendeley_app():
+    paths = find_mendeley_storage_paths()
+    print(json.dumps({"level": "debug", "event": "mendeley.storage_paths_scanned", "data": {"count": len(paths), "paths": [str(p) for p in paths]}}), flush=True)
+    for cfg_dir in paths:
+        for cookie_sub in [Path("Cookies"), Path("Network") / "Cookies"]:
+            cookie_file = cfg_dir / cookie_sub
+            if cookie_file.is_file():
+                tok = _extract_token_from_cookies(cookie_file)
+                if tok:
+                    print(json.dumps({"level": "info", "event": "mendeley.token_extracted", "data": {"source": "cookies", "path": str(cookie_file)}}), flush=True)
+                    return tok
+        cached_tok = _extract_token_from_cache(cfg_dir)
+        if cached_tok:
+            print(json.dumps({"level": "info", "event": "mendeley.token_extracted", "data": {"source": "cache", "path": str(cfg_dir)}}), flush=True)
+            return cached_tok
+    print(json.dumps({"level": "warn", "event": "mendeley.token_not_found", "data": {"scanned_count": len(paths)}}), flush=True)
     return None
 
 
