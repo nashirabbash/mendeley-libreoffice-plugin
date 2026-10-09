@@ -311,6 +311,13 @@ def make_handler(token_path):
             self.end_headers()
             self.wfile.write(body)
 
+
+        def _read_json_body(self, limit, size_error):
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > limit:
+                raise ValueError(size_error)
+            return json.loads(self.rfile.read(length).decode("utf-8"))
+
         def _reject_request(self):
             print(json.dumps({
                 "level": "warn",
@@ -374,10 +381,7 @@ def make_handler(token_path):
                 return
             if path == "/writer/state":
                 try:
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 1024:
-                        raise ValueError("invalid state")
-                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                    payload = self._read_json_body(1024, "invalid state")
                     state = payload.get("state") if isinstance(payload, dict) else None
                     if not isinstance(state, str) or re.fullmatch(r"writer-[a-f0-9]{48}", state) is None:
                         raise ValueError("invalid state")
@@ -390,10 +394,7 @@ def make_handler(token_path):
                 return
             if path == "/writer/token":
                 try:
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 16384:
-                        raise ValueError("invalid token")
-                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                    payload = self._read_json_body(16384, "invalid token")
                     token = payload.get("token") if isinstance(payload, dict) else None
                     state = payload.get("state") if isinstance(payload, dict) else None
                     if not isinstance(token, str) or not token or len(token) > 8192:
@@ -415,10 +416,7 @@ def make_handler(token_path):
                 self._send_json(404, {"error": "not_found"})
                 return
             try:
-                length = int(self.headers.get("Content-Length", "0"))
-                if length <= 0 or length > 16384:
-                    raise ValueError("invalid body size")
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                payload = self._read_json_body(16384, "invalid body size")
                 token = payload.get("token") if isinstance(payload, dict) else None
                 if not isinstance(token, str) or not token or len(token) > 8192:
                     raise ValueError("invalid token")
