@@ -147,11 +147,6 @@ sudo supervisorctl restart ds:docservice
 
 If Mendeley login reports that port `127.0.0.1:8080` is in use, another application is using the port required by the local helper.
 
-## Contributors
-
-[![nashirabbash](https://wsrv.nl/?url=github.com/nashirabbash.png&w=100&h=100&fit=cover&mask=circle&output=png)](https://github.com/nashirabbash)
-[![julsanjh](https://wsrv.nl/?url=github.com/julsanjh.png&w=100&h=100&fit=cover&mask=circle&output=png)](https://github.com/julsanjh)
-
 ## Contributing
 
 Bug reports and contributions are welcome through the [issue tracker](https://github.com/nashirabbash/plugin-mendeley/issues). This project is distributed under the [Apache License 2.0](LICENSE).
