@@ -96,14 +96,15 @@
         log("debug", "InMemoryAdapter.addFootnote", { totalFootnotes: this.footnotesCount });
         return Promise.resolve();
     };
-    InMemoryAdapter.prototype.addNoteCitation = function (tag, cleanText) {
+    InMemoryAdapter.prototype.addNoteCitation = function (tag, renderedText) {
         this.footnotesCount++;
+        var cleanText = String(renderedText || "").replace(/<[^>]+>/g, "");
         var control = {
             internalId: "inmem_ctrl_" + this.nextId++,
             tag: tag,
             placeHolderText: cleanText,
             text: cleanText,
-            html: cleanText,
+            html: renderedText,
             type: 2,
             isNoteStyle: true
         };
@@ -320,7 +321,7 @@
             });
         });
     };
-    OnlyOfficeAdapter.prototype.addNoteCitation = function (tag, cleanText) {
+    OnlyOfficeAdapter.prototype.addNoteCitation = function (tag, renderedText) {
         return new Promise(function (resolve) {
             if (typeof window === "undefined" || !window.Asc || !window.Asc.plugin) {
                 log("error", "OnlyOfficeAdapter.missingPlugin", {});
@@ -328,31 +329,38 @@
                 return;
             }
 
-            // Pre-set Asc.scope before callCommand to bridge variables across to editor frame
-            window.Asc = window.Asc || {};
+            var helper = DocBuilderHelper || (window.MendeleyApp && window.MendeleyApp.DocBuilderHelper);
+            var paragraphs = helper && helper.parseHtmlToRuns ? helper.parseHtmlToRuns(renderedText) : [];
+            var runs = paragraphs.length ? paragraphs[0].runs : [{
+                text: String(renderedText || "").replace(/<[^>]+>/g, ""),
+                italic: false,
+                bold: false
+            }];
+
             window.Asc.scope = window.Asc.scope || {};
             window.Asc.scope.noteTag = tag;
-            window.Asc.scope.noteText = cleanText;
+            window.Asc.scope.noteRuns = runs;
 
             window.Asc.plugin.callCommand(function () {
                 var oDoc = Api.GetDocument();
                 oDoc.AddFootnote();
                 var fnParas = oDoc.GetFootnotesFirstParagraphs();
-                if (fnParas && fnParas.length > 0) {
-                    var fnPara = fnParas[fnParas.length - 1];
-                    var tagVal = (typeof Asc !== "undefined" && Asc.scope && Asc.scope.noteTag) || "";
-                    var textVal = (typeof Asc !== "undefined" && Asc.scope && Asc.scope.noteText) || "";
-                    try {
-                        var sdt = Api.CreateInlineLvlSdt();
-                        sdt.SetTag(tagVal);
-                        sdt.AddText(textVal);
-                        fnPara.AddInlineLvlSdt(sdt);
-                    } catch (e) {
-                        fnPara.AddText(textVal);
-                    }
+                if (!fnParas || !fnParas.length) return;
+
+                var fnPara = fnParas[fnParas.length - 1];
+                var sdt = Api.CreateInlineLvlSdt();
+                sdt.SetTag(Asc.scope.noteTag);
+                var runs = Asc.scope.noteRuns || [];
+                for (var i = 0; i < runs.length; i++) {
+                    var run = Api.CreateRun();
+                    run.AddText(runs[i].text);
+                    if (runs[i].italic) run.SetItalic(true);
+                    if (runs[i].bold) run.SetBold(true);
+                    sdt.AddElement(run);
                 }
+                fnPara.AddInlineLvlSdt(sdt);
             }, false, true, function () {
-                log("info", "OnlyOfficeAdapter.addNoteCitation.success", { tag: tag });
+                log("info", "OnlyOfficeAdapter.addNoteCitation.success", { tag: tag, runCount: runs.length });
                 resolve(tag);
             });
         });
@@ -457,7 +465,7 @@
 
         var self = this;
         if (isNoteStyle && self.adapter && self.adapter.addNoteCitation) {
-            return self.adapter.addNoteCitation(base64Tag, cleanText).then(function (result) {
+            return self.adapter.addNoteCitation(base64Tag, renderedText).then(function (result) {
                 log("success", "DocumentModule.insertCitation", { citationId: citationObj.citationId, isNoteStyle: true });
                 return result;
             });

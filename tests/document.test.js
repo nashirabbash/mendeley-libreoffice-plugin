@@ -37,8 +37,9 @@ async function runTests() {
     const noteItems = [
         { id: "doc2", itemData: { id: "doc2", title: "Note Work" } }
     ];
-    const noteCtrlId = await doc.insertCitation(noteItems, "<sup>1</sup>", true);
+    const noteCtrlId = await doc.insertCitation(noteItems, "Turing, <i>Note Work</i>", true);
     assert.strictEqual(inMem.controls.length, 2);
+    assert.strictEqual(inMem.controls[1].html, "Turing, <i>Note Work</i>", "Note citation must preserve CSL formatting source");
     assert.strictEqual(inMem.footnotesCount, 1, "Footnote must be created for note style");
 
     // Test 4: Update citation text
