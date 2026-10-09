@@ -31,31 +31,58 @@ This plugin brings a Mendeley Cite-style workflow to ONLYOFFICE on Linux, so you
 
 ### Requirements
 
-- ONLYOFFICE Desktop Editors or a self-hosted ONLYOFFICE Document Server.
-- A Mendeley account.
-- A Mendeley OAuth application and its Client ID.
+- ONLYOFFICE Desktop Editors (Flatpak, Snap, or native) or a self-hosted ONLYOFFICE Document Server.
+- [Mendeley Reference Manager](https://www.mendeley.com/reference-management/mendeley-reference-manager) installed and signed in (for automatic zero-config connect).
+- *(Optional fallback)*: A Mendeley developer OAuth application ID if connecting manually via web OAuth.
 
 ### ONLYOFFICE Desktop Editors
 
-Install ONLYOFFICE Desktop Editors first. Download the installer for your operating system from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases). Installer packages add the Mendeley plugin and its local helper; they do not install ONLYOFFICE.
+Install ONLYOFFICE Desktop Editors first. You can install the Mendeley plugin and its local background helper using any of the methods below:
 
 #### Linux
 
-Install the matching `.deb` or `.rpm` package, then run:
+**Option 1: 1-Line Quick Install (Recommended)**
+Open your terminal and run:
 
 ```bash
+curl -sSL https://raw.githubusercontent.com/nashirabbash/plugin-mendeley/master/install.sh | bash
+```
+
+**Option 2: Universal Tarball**
+Download `mendeley-linux-installer.tar.gz` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases), extract it, and run:
+
+```bash
+./install.sh
+```
+
+**Option 3: Debian / Ubuntu / Linux Mint (`.deb`)**
+Download `mendeley-onlyoffice_1.1.0_all.deb` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases) and install:
+
+```bash
+sudo dpkg -i mendeley-onlyoffice_1.1.0_all.deb
 mendeley-onlyoffice-setup
 ```
 
-Choose your ONLYOFFICE installation when prompted. Setup installs the plugin for your user and starts the helper. The helper starts again at your next login.
+**Option 4: Fedora / RHEL / openSUSE (`.rpm`)**
+Download `mendeley-onlyoffice-1.1.0-1.noarch.rpm` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases) and install:
 
-Before removing the package, run `mendeley-onlyoffice-remove` to remove the plugin, autostart entry, helper, and local token.
+```bash
+sudo dnf install ./mendeley-onlyoffice-1.1.0-1.noarch.rpm
+mendeley-onlyoffice-setup
+```
+
+To uninstall at any time, run `mendeley-onlyoffice-remove` or `./uninstall.sh`.
 
 #### Windows
 
-Run the Mendeley ONLYOFFICE installer and select your ONLYOFFICE plugin directory. The helper starts after setup and at your next sign-in.
+1. Download the Windows installer package from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases).
+2. Run setup and select your ONLYOFFICE plugin directory. The background helper starts automatically.
 
-In ONLYOFFICE Desktop Editors, open **Plugins** and select **Mendeley**.
+#### Manual ONLYOFFICE GUI Installation (`.plugin`)
+
+1. Download `mendeley.plugin` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases).
+2. Open ONLYOFFICE Desktop Editors.
+3. Navigate to **Plugins** -> **Settings** / **Plugin Manager** -> select `mendeley.plugin`.
 
 ### ONLYOFFICE Document Server
 
@@ -69,12 +96,21 @@ Adjust source and destination paths for your checkout and installation. If your 
 
 ## Connect your Mendeley account
 
-Register a Mendeley OAuth application. In the plugin's **Config** screen, save its Client ID and set the redirect URI to the address shown there:
+### 1. Zero-Config Desktop Auto-Connect (Recommended)
 
-- **Desktop Editors:** `http://localhost:8080/`
-- **Document Server:** the HTTPS URL of the plugin's `oauth.html` page on your server.
+1. Make sure **Mendeley Reference Manager** is running and signed in on your computer.
+2. In ONLYOFFICE, open the **Plugins** tab and click **Mendeley**.
+3. The plugin will automatically detect your local Mendeley session and load your reference library.
+4. If prompted, simply click the green **⚡ Connect to Mendeley Desktop** button.
 
-Select **Login** in ONLYOFFICE and approve access on Mendeley's authorization page.
+### 2. Manual Web OAuth (Fallback)
+
+If you prefer using a Mendeley developer OAuth application:
+1. In the plugin's **Config** screen, enter your Mendeley Application ID.
+2. Set the redirect URI in your Mendeley Developer portal:
+   - **Desktop Editors:** `http://localhost:8080/`
+   - **Document Server:** the HTTPS URL of the plugin's `oauth.html` page on your server.
+3. Click **Save**, then click **Login to Mendeley (Web)** to authorize via browser.
 
 ![Mendeley OAuth sequence diagram](docs/mendeley-auth-sequence.png)
 
