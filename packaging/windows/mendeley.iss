@@ -7,7 +7,7 @@
 [Setup]
 AppId={{C15DDE2A-B8F5-4E6C-884B-11D76B9A67D0}
 AppName=Mendeley for ONLYOFFICE
-AppVersion=1.1.0
+AppVersion=1.1.1
 DefaultDirName={localappdata}\Programs\MendeleyOnlyOffice
 PrivilegesRequired=lowest
 OutputDir=..\..\dist\installers

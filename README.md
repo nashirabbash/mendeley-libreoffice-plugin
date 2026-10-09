@@ -56,18 +56,18 @@ Download `mendeley-linux-installer.tar.gz` from [Releases](https://github.com/na
 ```
 
 **Option 3: Debian / Ubuntu / Linux Mint (`.deb`)**
-Download `mendeley-onlyoffice_1.1.0_all.deb` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases) and install:
+Download `mendeley-onlyoffice_1.1.1_all.deb` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases) and install:
 
 ```bash
-sudo dpkg -i mendeley-onlyoffice_1.1.0_all.deb
+sudo dpkg -i mendeley-onlyoffice_1.1.1_all.deb
 mendeley-onlyoffice-setup
 ```
 
 **Option 4: Fedora / RHEL / openSUSE (`.rpm`)**
-Download `mendeley-onlyoffice-1.1.0-1.noarch.rpm` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases) and install:
+Download `mendeley-onlyoffice-1.1.1-1.noarch.rpm` from [Releases](https://github.com/nashirabbash/plugin-mendeley/releases) and install:
 
 ```bash
-sudo dnf install ./mendeley-onlyoffice-1.1.0-1.noarch.rpm
+sudo dnf install ./mendeley-onlyoffice-1.1.1-1.noarch.rpm
 mendeley-onlyoffice-setup
 ```
 

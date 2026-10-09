@@ -1,5 +1,7 @@
 # Change Log
 
+## 1.1.1
+
 - Auto-synced active Mendeley Reference Manager session token across Linux, Windows, and macOS, allowing seamless zero-config login without manual Application ID input.
 - Fixed Linux and Windows installers to target official ONLYOFFICE plugin GUID `{BE5CBF95-C0AD-4842-B157-AC40FEDD9441}` with compatibility symlinks for Flatpak and desktop editors.
 - Fixed ONLYOFFICE `file://` login requests rejected by Helper CORS; allow file and loopback origins, keep remote origins blocked, and clear stale login errors on retry.
@@ -8,6 +10,8 @@
 - Fixed duplicate journal names in bibliography output by mapping Mendeley source and series to separate CSL fields.
 - Explicitly set italic and bold on every bibliography run from CSL markup, preventing Word insertion formatting from leaking into unformatted text.
 - Set citation and bibliography content controls to full access and unlock existing Mendeley controls when plugin starts, enabling manual formatting in ONLYOFFICE.
+- Refreshed README demo media and authentication diagram; added contributor profile avatars.
+
 ## 1.1.0
 - Added per-user Linux `.deb`/`.rpm` and Windows installers with x64/ARM64 build matrix.
 - Bundled OAuth loopback helper so end users do not install Python or run the server manually.

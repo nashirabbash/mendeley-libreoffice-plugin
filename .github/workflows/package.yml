@@ -38,7 +38,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Build Debian and RPM packages
         env:
-          VERSION: 1.1.0
+          VERSION: 1.1.1
           NFPM_ARCH: ${{ matrix.arch }}
           STAGE: dist/package
         run: |
