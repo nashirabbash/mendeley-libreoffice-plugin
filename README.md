@@ -118,12 +118,13 @@ If you prefer using a Mendeley developer OAuth application:
 
 ### Token behavior
 
-The plugin sends the access token as a Bearer token when requesting library data. It does not refresh tokens automatically. If Mendeley rejects a token with `401`, the plugin clears its local session and asks you to sign in again.
+The plugin reuses its browser-stored `mendToken` at startup. If none exists, Desktop Editors checks the loopback helper at `127.0.0.1:8080/token`; the helper returns its per-user token file or detects the signed-in Mendeley Reference Manager session. If neither provides a token, use manual Web OAuth.
 
-- **Desktop Editors:** the helper at `127.0.0.1:8080` receives and saves a per-user token. The plugin reads it from the helper and stores its own copy in browser storage.
-- **Document Server:** Mendeley redirects to `oauth.html`, which passes the token to the plugin window. The plugin stores the token in browser storage.
+- **Desktop Editors:** Mendeley redirects to the loopback helper, which saves the token. The plugin polls `/token` and stores its own copy in browser storage.
+- **Document Server:** Mendeley redirects to the plugin's `oauth.html`, which passes the token to the plugin window. The plugin stores it in browser storage.
+- **API and session:** The plugin sends the access token as a Bearer token. It does not refresh tokens automatically. A `401` clears the plugin's browser-stored token and returns to sign-in.
 
-Logging out clears the plugin's browser-stored token. In Desktop Editors, the helper's saved copy remains, so the plugin can restore the session when reopened. Starting a new login clears that helper copy first.
+Logging out clears the plugin's browser-stored token. In Desktop Editors, the helper's saved token remains, so the plugin can restore the session when reopened. Starting a new manual login clears both plugin and helper token copies first.
 
 ## Use the plugin
 
