@@ -1881,48 +1881,167 @@
         });
     }
 
-    function insertBibliographyFromDocument() {
-        if (!selectedStyle || !styles[selectedStyle] || !selectedLocale || !locales[selectedLocale]) {
-            showError(getMessage("Style or Language is not selected"));
-            return;
+    var allMendeleyDocsCache = [];
+    function fetchAllMendeleyDocs() {
+        if (allMendeleyDocsCache.length > 0) {
+            return Promise.resolve(allMendeleyDocsCache);
         }
-        documentModule.getCitations().then(function(citationRecords) {
-            if (!citationRecords || !citationRecords.length) {
-                showError("No citations found in document");
-                return;
+        var token = authFlow.getToken();
+        if (!token) return Promise.resolve([]);
+
+        return fetch("https://api.mendeley.com/documents?view=all&limit=200", {
+            headers: {
+                "Authorization": "Bearer " + token,
+                "Accept": "application/vnd.mendeley-document.1+json"
             }
-            var cslItems = {};
-            var ids = [];
-            citationRecords.forEach(function(cluster) {
-                if (cluster.citationItems) {
-                    cluster.citationItems.forEach(function(ci) {
-                        if (!cslItems[ci.id]) {
-                            cslItems[ci.id] = ci.itemData;
-                            ids.push(ci.id);
-                        }
-                    });
-                }
-            });
-            if (!ids.length) {
-                showError("No Mendeley citations found in document");
-                return;
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(docs) {
+            if (Array.isArray(docs)) {
+                allMendeleyDocsCache = docs;
             }
-            try {
-                var engine = new CSL.Engine({
-                    retrieveLocale: function(l) { return locales[l]; },
-                    retrieveItem: function(id) { return cslItems[id]; }
-                }, styles[selectedStyle], selectedLocale, true);
-                engine.updateItems(ids);
-                var bibRes = engine.makeBibliography();
-                if (bibRes && bibRes[1]) {
-                    insertInDocument(bibRes[1]);
-                }
-            } catch(e) {
-                showError(e);
-            }
+            return allMendeleyDocsCache;
+        })
+        .catch(function() {
+            return allMendeleyDocsCache;
         });
     }
 
+    function findCitationsInTextAndLibrary(docText) {
+        if (!docText || typeof docText !== "string") {
+            return Promise.resolve({ cslItems: {}, ids: [] });
+        }
+
+        var citPattern = /\(([^\)]*?\b(19\d\d|20\d\d)\b[^\)]*?)\)/g;
+        var targets = [];
+        var match;
+        while ((match = citPattern.exec(docText)) !== null) {
+            var rawInside = match[1] || "";
+            var yearMatch = rawInside.match(/\b(19\d\d|20\d\d)\b/);
+            if (!yearMatch) continue;
+            var year = parseInt(yearMatch[1], 10);
+            var authorPart = rawInside.split(yearMatch[1])[0] || "";
+            var authorWordMatch = authorPart.match(/([A-Z\u00C0-\u024F][a-zA-Z\u00C0-\u024F\.\-]+)/);
+            var authorKeyword = authorWordMatch ? authorWordMatch[1].toLowerCase().replace(/[^a-z]/g, "") : "";
+            if (authorKeyword && authorKeyword !== "et" && authorKeyword !== "al") {
+                targets.push({ author: authorKeyword, year: year });
+            }
+        }
+
+        if (!targets.length) {
+            return Promise.resolve({ cslItems: {}, ids: [] });
+        }
+
+        return fetchAllMendeleyDocs().then(function(docs) {
+            var cslItems = {};
+            var ids = [];
+            var seenIds = {};
+
+            targets.forEach(function(t) {
+                for (var i = 0; i < docs.length; i++) {
+                    var d = docs[i];
+                    if (!d || !d.id || seenIds[d.id]) continue;
+                    var docYear = parseInt(d.year, 10);
+                    if (docYear === t.year) {
+                        var authors = d.authors || [];
+                        var authorMatched = false;
+                        for (var a = 0; a < authors.length; a++) {
+                            var ln = (authors[a].last_name || authors[a].family || "").toLowerCase().replace(/[^a-z]/g, "");
+                            if (ln && (ln.indexOf(t.author) !== -1 || t.author.indexOf(ln) !== -1)) {
+                                authorMatched = true;
+                                break;
+                            }
+                        }
+                        if (authorMatched) {
+                            seenIds[d.id] = true;
+                            cslItems[d.id] = convertMendeleyToCSL(d);
+                            ids.push(d.id);
+                            break;
+                        }
+                    }
+                }
+            });
+
+            return { cslItems: cslItems, ids: ids };
+        });
+    }
+
+    function generateAndInsertBibliography(cslItems, ids) {
+        try {
+            var engine = new CSL.Engine({
+                retrieveLocale: function(l) { return locales[l]; },
+                retrieveItem: function(id) { return cslItems[id]; }
+            }, styles[selectedStyle], selectedLocale, true);
+            engine.updateItems(ids);
+            var bibRes = engine.makeBibliography();
+            showLoader(false);
+            if (bibRes && bibRes[1]) {
+                insertInDocument(bibRes[1]);
+            } else {
+                showError("Bibliography could not be generated with selected style");
+            }
+        } catch(e) {
+            showLoader(false);
+            showError(e);
+        }
+    }
+
+    function insertBibliographyFromDocument() {
+        if (!selectedStyle) selectedStyle = "apa";
+        if (!selectedLocale) selectedLocale = "en-US";
+
+        showLoader(true);
+        Promise.all([getStyle(selectedStyle), getLocale(selectedLocale)]).then(function() {
+            return documentModule.getCitations();
+        }).then(function(citationRecords) {
+            if (citationRecords && citationRecords.length) {
+                var cslItems = {};
+                var ids = [];
+                citationRecords.forEach(function(cluster) {
+                    if (cluster.citationItems) {
+                        cluster.citationItems.forEach(function(ci) {
+                            if (!cslItems[ci.id]) {
+                                cslItems[ci.id] = ci.itemData;
+                                ids.push(ci.id);
+                            }
+                        });
+                    }
+                });
+                if (ids.length) {
+                    generateAndInsertBibliography(cslItems, ids);
+                    return;
+                }
+            }
+
+            // Fallback 1: Scan document text for citations and match against Mendeley library
+            return documentModule.getDocumentText().then(function(docText) {
+                return findCitationsInTextAndLibrary(docText);
+            }).then(function(matchedItems) {
+                if (matchedItems && matchedItems.ids && matchedItems.ids.length) {
+                    generateAndInsertBibliography(matchedItems.cslItems, matchedItems.ids);
+                    return;
+                }
+
+                // Fallback 2: Check current sidebar selection
+                if (selected.count() > 0) {
+                    var cslData = {};
+                    var keys = [];
+                    for (var k in selected.items) {
+                        cslData[k] = convertMendeleyToCSL(selected.items[k]);
+                        keys.push(k);
+                    }
+                    generateAndInsertBibliography(cslData, keys);
+                    return;
+                }
+
+                showLoader(false);
+                showError("No citations found in document");
+            });
+        }).catch(function(err) {
+            showLoader(false);
+            showError("Failed to insert bibliography: " + (err.message || err));
+        });
+    }
     function unlinkAllCitations() {
         documentModule.unlinkAll().catch(function(err) {
             console.warn("Unlink all citations error:", err);

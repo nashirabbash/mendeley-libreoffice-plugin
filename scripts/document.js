@@ -114,6 +114,9 @@
         log("info", "InMemoryAdapter.removeContentControl", { internalId: internalId, removed: beforeLen !== this.controls.length });
         return Promise.resolve();
     };
+    InMemoryAdapter.prototype.getDocumentText = function () {
+        return Promise.resolve(this.docText || "");
+    };
 
     function OnlyOfficeAdapter() {}
 
@@ -124,10 +127,93 @@
                 resolve([]);
                 return;
             }
-            window.Asc.plugin.executeMethod("GetAllContentControls", [], function (controls) {
-                log("debug", "OnlyOfficeAdapter.getAllContentControls", { count: (controls || []).length });
-                resolve(controls || []);
-            });
+
+            var merged = [];
+            var pending = 2;
+            var done = false;
+
+            function finish() {
+                if (done) return;
+                done = true;
+                log("debug", "OnlyOfficeAdapter.getAllContentControls", {
+                    count: merged.length,
+                    sample: merged.length ? { id: merged[0].InternalId, tag: (merged[0].Tag || "").substring(0, 60) } : null
+                });
+                resolve(merged);
+            }
+
+            function step() {
+                pending--;
+                if (pending <= 0) finish();
+            }
+
+            // 1. Query Addin Fields (fields created via AddAddinField)
+            try {
+                window.Asc.plugin.executeMethod("GetAllAddinFields", null, function (fields) {
+                    if (Array.isArray(fields)) {
+                        for (var i = 0; i < fields.length; i++) {
+                            var f = fields[i];
+                            if (f) {
+                                merged.push({
+                                    InternalId: f.FieldId || f.fieldId || f.Id || "",
+                                    Tag: f.Value || f.value || f.Tag || f.tag || "",
+                                    Content: f.Content || f.content || "",
+                                    isAddinField: true
+                                });
+                            }
+                        }
+                    }
+                    step();
+                });
+            } catch (e) {
+                step();
+            }
+
+            // 2. Query Content Controls (controls created via ContentControl API)
+            try {
+                window.Asc.plugin.executeMethod("GetAllContentControls", [], function (controls) {
+                    if (Array.isArray(controls)) {
+                        for (var j = 0; j < controls.length; j++) {
+                            var ctrl = controls[j];
+                            if (ctrl) {
+                                merged.push({
+                                    InternalId: ctrl.InternalId || ctrl.internalId || ctrl.Id || "",
+                                    Tag: ctrl.Tag || ctrl.tag || ctrl.Value || ctrl.value || "",
+                                    Content: ctrl.Content || ctrl.content || "",
+                                    isAddinField: false
+                                });
+                            }
+                        }
+                    }
+                    step();
+                });
+            } catch (e) {
+                step();
+            }
+
+            // Guard timeout if one executeMethod callback fails to respond
+            setTimeout(function () {
+                finish();
+            }, 500);
+        });
+    };
+
+    OnlyOfficeAdapter.prototype.getDocumentText = function () {
+        return new Promise(function (resolve) {
+            if (typeof window === "undefined" || !window.Asc || !window.Asc.plugin) {
+                resolve("");
+                return;
+            }
+            try {
+                window.Asc.plugin.callCommand(function () {
+                    var oDoc = Api.GetDocument();
+                    return oDoc.GetText();
+                }, false, false, function (text) {
+                    resolve(text || "");
+                });
+            } catch (e) {
+                resolve("");
+            }
         });
     };
 
@@ -219,16 +305,24 @@
     };
 
     function DocumentModule(adapter) {
-        if (!adapter) {
-            if (typeof window !== "undefined" && window.Asc && window.Asc.plugin) {
-                this.adapter = new OnlyOfficeAdapter();
-            } else {
-                this.adapter = new InMemoryAdapter();
-            }
-        } else {
-            this.adapter = adapter;
-        }
+        // Store explicit adapter (tests only). Runtime adapter resolved lazily
+        // on first use so construction before window.Asc.plugin is safe.
+        this._adapter = adapter || null;
     }
+
+    Object.defineProperty(DocumentModule.prototype, "adapter", {
+        get: function () {
+            if (this._adapter) return this._adapter;
+            // Resolve and cache: by the time any method is called, Asc.plugin
+            // should already be available (called from within plugin.init).
+            if (typeof window !== "undefined" && window.Asc && window.Asc.plugin) {
+                this._adapter = new OnlyOfficeAdapter();
+            } else {
+                this._adapter = new InMemoryAdapter();
+            }
+            return this._adapter;
+        }
+    });
 
     DocumentModule.prototype.insertCitation = function (citationItems, renderedText, isNoteStyle) {
         var cleanText = String(renderedText || "").replace(/<[^>]+>/g, "");
@@ -262,6 +356,13 @@
         return (raw || "").replace(/^ITEM /, "");
     }
 
+    DocumentModule.prototype.getDocumentText = function () {
+        if (this.adapter && this.adapter.getDocumentText) {
+            return this.adapter.getDocumentText();
+        }
+        return Promise.resolve("");
+    };
+
     DocumentModule.prototype.getCitations = function () {
         return this.adapter.getAllContentControls().then(function (controls) {
             var records = [];
@@ -270,9 +371,18 @@
             for (var i = 0; i < controls.length; i++) {
                 var ctrl = controls[i];
                 var tag = normalizeTag(ctrl.Tag);
+                var b64 = "";
                 if (tag.indexOf(TAG_PREFIX) === 0) {
+                    b64 = tag.substring(TAG_PREFIX.length);
+                } else if (tag.indexOf("MENDELEY_CITATION_") === 0) {
+                    var m = tag.match(/^MENDELEY_CITATION_(?:v\d+_)?(.*)$/);
+                    if (m && m[1]) {
+                        b64 = m[1];
+                    }
+                }
+
+                if (b64) {
                     try {
-                        var b64 = tag.substring(TAG_PREFIX.length);
                         var payload = JSON.parse(decodeBase64(b64));
                         if (payload && payload.citationItems) {
                             records.push({

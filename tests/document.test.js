@@ -75,6 +75,11 @@ async function runTests() {
     assert.strictEqual(inMem.controls.length, 1, "Only non-Mendeley control should remain");
     assert.strictEqual(inMem.controls[0].internalId, "other_ctrl_99", "Unrelated control must not be deleted");
 
+    // Test 8: getDocumentText support
+    inMem.docText = "This is a study by (Furlanetto et al., 2016) and (Kuo et al., 2009).";
+    const text = await doc.getDocumentText();
+    assert.strictEqual(text, "This is a study by (Furlanetto et al., 2016) and (Kuo et al., 2009).");
+
     console.log("# All tests passed successfully!");
 }
 
