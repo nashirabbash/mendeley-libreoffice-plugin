@@ -449,7 +449,8 @@
     });
 
     DocumentModule.prototype.insertCitation = function (citationItems, renderedText, isNoteStyle) {
-        var cleanText = String(renderedText || "").replace(/<[^>]+>/g, "");
+        var plainText = String(renderedText || "").replace(/<[^>]+>/g, "");
+        var cleanText = DocBuilderHelper && DocBuilderHelper.decodeEntities ? DocBuilderHelper.decodeEntities(plainText) : plainText;
         var citationObj = {
             citationId: "CITATION_" + new Date().getTime(),
             citationItems: citationItems,

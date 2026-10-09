@@ -17,11 +17,11 @@ async function runTests() {
         }
     ];
 
-    const ctrlId = await doc.insertCitation(testItems, "<b>(Turing, 2026, p. 14)</b>", false);
+    const ctrlId = await doc.insertCitation(testItems, "<b>(Turing &#38; Lovelace, 2026, p. 14)</b>", false);
     assert.ok(ctrlId, "Control ID must be returned");
     assert.strictEqual(inMem.controls.length, 1, "Should have 1 control in memory");
-    assert.strictEqual(inMem.controls[0].text, "(Turing, 2026, p. 14)", "HTML tags must be stripped from rendered text");
-    assert.strictEqual(inMem.controls[0].placeHolderText, "(Turing, 2026, p. 14)", "PlaceHolderText must match citation text to prevent default 'Your text here'");
+    assert.strictEqual(inMem.controls[0].text, "(Turing & Lovelace, 2026, p. 14)", "HTML tags must be stripped and entities decoded from rendered text");
+    assert.strictEqual(inMem.controls[0].placeHolderText, "(Turing & Lovelace, 2026, p. 14)", "PlaceHolderText must match citation text to prevent default 'Your text here'");
     assert.strictEqual(inMem.footnotesCount, 0, "No footnotes should be created for inline style");
     // Test 2: Read citations back
     const citations = await doc.getCitations();

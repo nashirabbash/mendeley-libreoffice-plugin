@@ -8,6 +8,7 @@
 - Added unit test suite in `tests/docbuilder.test.js`.
 - Fixed note/footnote citations: append inline content control (`ApiInlineLvlSdt`) directly to footnote paragraph (`GetFootnotesFirstParagraphs`) so citation text appears immediately beside footnote number without line break.
 - Preserved CSL italic and bold formatting in note/footnote citations by rendering each CSL text run as an `ApiRun` inside inline Content Control.
+- Decoded CSL HTML/XML entities before inserting normal citations, fixing APA `&#38;` output to render as `&`.
 
 ## 1.0.4
 - Refactored and modularized monolithic `scripts/code.js` (2,250 lines) into 19 single-responsibility modules.
