@@ -31,10 +31,12 @@
         }
 
         function handleDesktopSync() {
+            if (App.setManualLogout) App.setManualLogout(false);
             if (Helpers && Helpers.showLoader) Helpers.showLoader(true);
             if (Helpers && Helpers.showError) Helpers.showError(null);
             if (App.tryAutoConnectDesktop) {
                 App.tryAutoConnectDesktop(function (token) {
+                    if (App.stopDesktopPolling) App.stopDesktopPolling();
                     if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
                     window._activeMendToken = token;
                     if (typeof localStorage !== "undefined") localStorage.setItem("mendToken", token);
@@ -67,6 +69,7 @@
         if (elements.loginBtn) {
             elements.loginBtn.onclick = function (e) {
                 if (e.target.classList.contains(displayNoneClass)) return true;
+                if (App.setManualLogout) App.setManualLogout(false);
                 Auth.authFlow.authenticate();
                 return true;
             };
@@ -75,6 +78,8 @@
         if (elements.logoutLink) {
             elements.logoutLink.onclick = function (e) {
                 if (e.target.classList.contains(displayNoneClass)) return true;
+                if (App.setManualLogout) App.setManualLogout(true);
+                if (App.stopDesktopPolling) App.stopDesktopPolling();
                 if (typeof localStorage !== "undefined") localStorage.removeItem("mendToken");
                 window._activeMendToken = null;
                 LibraryView.clearLibrary();
