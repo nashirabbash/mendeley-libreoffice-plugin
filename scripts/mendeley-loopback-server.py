@@ -161,7 +161,7 @@ def make_handler(token_path):
     class OAuthLoopbackHandler(BaseHTTPRequestHandler):
         def _approved_origin(self):
             origin = self.headers.get("Origin")
-            if origin in (None, "null", "file://"):
+            if origin in (None, "null", "file://") or (isinstance(origin, str) and (origin.startswith("file:") or origin.startswith("app:"))):
                 return True
             try:
                 parsed = urllib.parse.urlsplit(origin)
@@ -180,7 +180,8 @@ def make_handler(token_path):
 
         def _approved_host(self):
             host = self.headers.get("Host", "").split(":", 1)[0]
-            return host in ("127.0.0.1", "localhost")
+            return host in ("127.0.0.1", "localhost", "::1", "")
+
         def _send_json(self, status, payload):
             body = json.dumps(payload).encode("utf-8")
             self.send_response(status)
@@ -191,8 +192,12 @@ def make_handler(token_path):
             if origin is not None and self._approved_origin():
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
+            elif self._approved_origin():
+                self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
             self.end_headers()
             self.wfile.write(body)
+
         def _reject_request(self):
             print(json.dumps({
                 "level": "warn",
@@ -206,7 +211,6 @@ def make_handler(token_path):
             }), flush=True)
             self._send_json(403, {"error": "origin_not_allowed"})
 
-
         def do_OPTIONS(self):
             if not self._approved_origin():
                 self._reject_request()
@@ -216,8 +220,11 @@ def make_handler(token_path):
             if origin is not None:
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
+            else:
+                self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, *")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
             self.end_headers()
 
         def do_GET(self):

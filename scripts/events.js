@@ -30,6 +30,33 @@
             };
         }
 
+        function handleDesktopSync() {
+            if (Helpers && Helpers.showLoader) Helpers.showLoader(true);
+            if (Helpers && Helpers.showError) Helpers.showError(null);
+            if (App.tryAutoConnectDesktop) {
+                App.tryAutoConnectDesktop(function (token) {
+                    if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
+                    window._activeMendToken = token;
+                    if (typeof localStorage !== "undefined") localStorage.setItem("mendToken", token);
+                    Auth.switchAuthState("main");
+                    LibraryView.loadFilteredLibrary(false);
+                }, function () {
+                    if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
+                    if (Helpers && Helpers.showError) {
+                        Helpers.showError("Mendeley Desktop belum terdeteksi. Buka aplikasi Mendeley Reference Manager dan pastikan sudah login, lalu klik tombol ini lagi.");
+                    }
+                });
+            }
+        }
+
+        if (elements.autoConnectBtn) {
+            elements.autoConnectBtn.onclick = handleDesktopSync;
+        }
+
+        if (elements.autoConnectBtnLogin) {
+            elements.autoConnectBtnLogin.onclick = handleDesktopSync;
+        }
+
         if (elements.reconfigBtn) {
             elements.reconfigBtn.onclick = function () {
                 Helpers.clearSettings();

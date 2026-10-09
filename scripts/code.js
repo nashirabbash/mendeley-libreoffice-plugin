@@ -23,8 +23,72 @@
     App.sdk = null;
     App.elements = null;
 
+    function tryAutoConnectDesktop(onSuccess, onFailure) {
+        function tryXhr(url, cb) {
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", url, true);
+                xhr.timeout = 3000;
+                xhr.onload = function () {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            var data = JSON.parse(xhr.responseText);
+                            if (data && data.token) {
+                                cb(null, data.token);
+                                return;
+                            }
+                        } catch (e) {}
+                    }
+                    cb(new Error("XHR status " + xhr.status));
+                };
+                xhr.onerror = function () { cb(new Error("XHR network error")); };
+                xhr.ontimeout = function () { cb(new Error("XHR timeout")); };
+                xhr.send();
+            } catch (e) {
+                cb(e);
+            }
+        }
+
+        function tryEndpoint(url, cb) {
+            if (typeof fetch === "function") {
+                fetch(url, { cache: "no-store" })
+                    .then(function (r) {
+                        if (!r.ok) throw new Error("HTTP " + r.status);
+                        return r.json();
+                    })
+                    .then(function (data) {
+                        if (data && data.token) {
+                            cb(null, data.token);
+                        } else {
+                            tryXhr(url, cb);
+                        }
+                    })
+                    .catch(function () {
+                        tryXhr(url, cb);
+                    });
+            } else {
+                tryXhr(url, cb);
+            }
+        }
+
+        tryEndpoint("http://127.0.0.1:8080/token", function (err, token) {
+            if (token) {
+                onSuccess(token);
+            } else {
+                tryEndpoint("http://localhost:8080/token", function (err2, token2) {
+                    if (token2) {
+                        onSuccess(token2);
+                    } else if (onFailure) {
+                        onFailure(err2 || err);
+                    }
+                });
+            }
+        });
+    }
+
     // Direct exports for module interoperability
     App.loadFilteredLibrary = LibraryView.loadFilteredLibrary;
+    App.tryAutoConnectDesktop = tryAutoConnectDesktop;
 
     window.Asc.plugin.init = function () {
         var elements = {
@@ -36,6 +100,8 @@
             docsHolder: document.getElementById("docsHolder"),
             docsThumb: document.getElementById("docsThumb"),
             configState: document.getElementById("configState"),
+            autoConnectBtn: document.getElementById("autoConnectBtn"),
+            autoConnectBtnLogin: document.getElementById("autoConnectBtnLogin"),
             redirectConfigUrl: document.getElementById("redirectConfig"),
             redirectUrlCopy: document.getElementById("redirectUrlCopy"),
             reconfigBtn: document.getElementById("reconfigBtn"),
@@ -152,23 +218,15 @@
             Auth.switchAuthState("main");
             LibraryView.loadFilteredLibrary(false);
         } else {
-            fetch("http://127.0.0.1:8080/token")
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data && data.token) {
-                        window._activeMendToken = data.token;
-                        if (typeof localStorage !== "undefined") localStorage.setItem("mendToken", data.token);
-                        Auth.switchAuthState("main");
-                        LibraryView.loadFilteredLibrary(false);
-                    } else {
-                        var hasMend = (window.Asc.plugin.mendeley || Helpers.getSettings());
-                        Auth.switchAuthState(hasMend ? "login" : "config");
-                    }
-                })
-                .catch(function () {
-                    var hasMend = (window.Asc.plugin.mendeley || Helpers.getSettings());
-                    Auth.switchAuthState(hasMend ? "login" : "config");
-                });
+            tryAutoConnectDesktop(function (token) {
+                window._activeMendToken = token;
+                if (typeof localStorage !== "undefined") localStorage.setItem("mendToken", token);
+                Auth.switchAuthState("main");
+                LibraryView.loadFilteredLibrary(false);
+            }, function () {
+                var hasMend = (window.Asc.plugin.mendeley || Helpers.getSettings());
+                Auth.switchAuthState(hasMend ? "login" : "config");
+            });
         }
 
         if (window.Asc.plugin.mendeley && elements.reconfigBtn) {
