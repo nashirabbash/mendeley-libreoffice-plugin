@@ -28,7 +28,7 @@ class PanelCallback(unohelper.Base, XCallback):
         self.panel = panel
 
     def notify(self, result):
-        self.panel.apply_result(result)
+        self.panel.apply_result(json.loads(result))
 
 
 class PanelActionListener(unohelper.Base, XActionListener):
@@ -164,8 +164,8 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
         elif command == "webLogin":
             self.oauth_generation += 1
             generation = self.oauth_generation
-            self._show_status("Preparing secure browser sign-in…")
             threading.Thread(target=self._worker_action, args=("begin_oauth", None, generation), daemon=True).start()
+            self._show_status("Preparing secure browser sign-in…")
         elif command == "search":
             query = self.search_field.getText().strip()
             if not self.access_token:
@@ -192,10 +192,13 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
                 token=self.access_token,
                 query=query,
             )
-            self.callback.addCallback(self.panel_callback, (command, result, generation))
+            if command == "begin_oauth" and result.get("status") == "ok":
+                self._open_oauth(result["url"], generation)
+                return
+            self.callback.addCallback(self.panel_callback, json.dumps((command, result, generation)))
         except Exception as error:
             log_event("error", "writer.worker.request_failed", {"command": command, "error": str(error)})
-            self.callback.addCallback(self.panel_callback, (command, {"status": "error", "error": "Mendeley request failed. Check your network and try again."}, generation))
+            self.callback.addCallback(self.panel_callback, json.dumps((command, {"status": "error", "error": "Mendeley request failed. Check your network and try again."}, generation)))
 
     def _poll_oauth(self, generation):
         for attempt in range(300):
@@ -204,14 +207,14 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
             try:
                 result = self._run_worker({"command": "oauth_token"})
                 if result.get("status") == "ok":
-                    self.callback.addCallback(self.panel_callback, ("oauth_token", result, generation))
+                    self.callback.addCallback(self.panel_callback, json.dumps(("oauth_token", result, generation)))
                     return
             except Exception as error:
                 log_event("error", "writer.oauth.poll_failed", {"error": str(error)})
-                self.callback.addCallback(self.panel_callback, ("oauth_error", {}, generation))
+                self.callback.addCallback(self.panel_callback, json.dumps(("oauth_error", {}, generation)))
                 return
             time.sleep(1)
-        self.callback.addCallback(self.panel_callback, ("oauth_error", {}, generation))
+        self.callback.addCallback(self.panel_callback, json.dumps(("oauth_error", {}, generation)))
 
     def _open_oauth(self, url, generation):
         threading.Thread(target=self._launch_oauth, args=(url, generation), daemon=True).start()
@@ -220,8 +223,8 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
         try:
             if not webbrowser.open(url):
                 raise RuntimeError("No browser could open Mendeley sign-in.")
-            self._show_status("Complete sign-in in your browser. Waiting for Mendeley…")
             threading.Thread(target=self._poll_oauth, args=(generation,), daemon=True).start()
+            self._show_status("Complete sign-in in your browser. Waiting for Mendeley…")
         except Exception as error:
             log_event("error", "writer.oauth.browser_failed", {"error": str(error)})
             self._show_status("Could not open browser. Check your default browser and try again.")
@@ -279,7 +282,7 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
             self.results.addItems(tuple(labels), 0)
 
     def _show_status(self, message):
-        self.callback.addCallback(self.panel_callback, ("status", {"message": message}))
+        self.callback.addCallback(self.panel_callback, json.dumps(("status", {"message": message})))
 
     def show_status(self, message):
         if self.status_text is not None:

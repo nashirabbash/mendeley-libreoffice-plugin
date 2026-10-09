@@ -68,6 +68,8 @@ class SidebarStateTest(unittest.TestCase):
         panel.panel_callback = sidebar.PanelCallback(panel)
 
         panel._set_logged_in(False)
+        panel._show_status("Preparing sign-in")
+        self.assertEqual(panel.status_text.text, "Preparing sign-in")
         self.assertTrue(panel.connect_button.visible)
         self.assertFalse(panel.search_field.visible)
 
@@ -83,6 +85,30 @@ class SidebarStateTest(unittest.TestCase):
         self.assertTrue(panel.connect_button.visible)
         self.assertFalse(panel.search_field.visible)
         self.assertEqual(panel.search_field.text, "")
+        panel.access_token = None
+        panel._run_worker = lambda *args, **kwargs: {"status": "ok", "url": "https://api.mendeley.com/oauth/authorize"}
+        opened = []
+        panel._open_oauth = lambda url, generation: opened.append((url, generation))
+        panel.callback.addCallback = lambda *args: self.fail("OAuth launch must not wait for the UNO callback")
+        panel._worker_action("begin_oauth", generation=0)
+        self.assertEqual(opened, [("https://api.mendeley.com/oauth/authorize", 0)])
+        started = []
+
+        class ThreadStub:
+            def __init__(self, target, args, daemon):
+                self.args = args
+
+            def start(self):
+                started.append(self.args)
+
+        def fail_callback(*args):
+            raise RuntimeError("UNO callback unavailable")
+
+        panel.callback.addCallback = fail_callback
+        with patch.object(sidebar.threading, "Thread", ThreadStub):
+            with self.assertRaisesRegex(RuntimeError, "UNO callback unavailable"):
+                panel.handle_action("webLogin")
+        self.assertEqual(started, [("begin_oauth", None, 1)])
         self.assertEqual(panel.results.items, [])
 
 
