@@ -49,18 +49,20 @@ async function runTests() {
     let bib = await doc.getBibliography();
     assert.strictEqual(bib, null, "Bibliography should not exist yet");
 
-    const bibId = await doc.insertBibliography("<p>Turing. (2026). Study of Architecture.</p>");
+    const bibId = await doc.insertBibliography("<p>Turing. (2026). Study of Architecture.</p>", { hangingIndent: true });
     assert.ok(bibId);
     assert.strictEqual(inMem.controls.length, 3);
+    assert.strictEqual(inMem.controls[2].options.hangingIndent, true, "Hanging indent option should be saved");
 
     bib = await doc.getBibliography();
     assert.ok(bib);
     assert.strictEqual(bib.internalId, bibId);
 
     // Test 6: Update bibliography HTML
-    await doc.updateBibliographyHtml(bibId, "<p>Turing. (2026). Study of Architecture (2nd ed).</p>");
+    await doc.updateBibliographyHtml(bibId, "<p>Turing. (2026). Study of Architecture (2nd ed).</p>", { hangingIndent: false });
     const bibCtrl = inMem.controls.find(c => c.internalId === bibId);
     assert.strictEqual(bibCtrl.html, "<p>Turing. (2026). Study of Architecture (2nd ed).</p>");
+    assert.strictEqual(bibCtrl.options.hangingIndent, false, "Updated hanging indent option should be saved");
 
     // Test 7: Add unrelated third-party control and unlink all
     inMem.controls.push({

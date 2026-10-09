@@ -3,16 +3,17 @@
  */
 (function (root, factory) {
     if (typeof exports === "object" && typeof module === "object") {
-        module.exports = factory();
+        module.exports = factory(require("./docbuilder-helper"));
     } else if (typeof define === "function" && define.amd) {
-        define([], factory);
+        define(["./docbuilder-helper"], factory);
     } else {
-        var exp = factory();
+        var helper = root.DocBuilderHelper || (root.MendeleyApp && root.MendeleyApp.DocBuilderHelper);
+        var exp = factory(helper);
         root.DocumentModule = exp.DocumentModule;
         root.OnlyOfficeAdapter = exp.OnlyOfficeAdapter;
         root.InMemoryAdapter = exp.InMemoryAdapter;
     }
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (DocBuilderHelper) {
 
     function log(level, event, data) {
         var payload = {
@@ -75,14 +76,15 @@
         log("info", "InMemoryAdapter.addAddinField", { internalId: control.internalId, tag: tag });
         return Promise.resolve(control.internalId);
     };
-    InMemoryAdapter.prototype.addContentControl = function (type, properties, content, isHtml) {
+    InMemoryAdapter.prototype.addContentControl = function (type, properties, content, isHtml, options) {
         var control = {
             internalId: "inmem_ctrl_" + this.nextId++,
             tag: properties.Tag || "",
             placeHolderText: properties.PlaceHolderText,
             text: isHtml ? String(content || "").replace(/<[^>]+>/g, "") : (content || ""),
             html: content || "",
-            type: type
+            type: type,
+            options: options || {}
         };
         this.controls.push(control);
         log("info", "InMemoryAdapter.addContentControl", { internalId: control.internalId, tag: control.tag });
@@ -107,10 +109,11 @@
         return Promise.resolve();
     };
 
-    InMemoryAdapter.prototype.updateControlHtml = function (internalId, html) {
+    InMemoryAdapter.prototype.updateControlHtml = function (internalId, html, options) {
         for (var i = 0; i < this.controls.length; i++) {
             if (this.controls[i].internalId === internalId) {
                 this.controls[i].html = html;
+                if (options != null) this.controls[i].options = options;
                 log("info", "InMemoryAdapter.updateControlHtml", { internalId: internalId, length: html.length });
                 return Promise.resolve();
             }
@@ -230,7 +233,7 @@
         });
     };
 
-    OnlyOfficeAdapter.prototype.addContentControl = function (type, properties, content, isHtml) {
+    OnlyOfficeAdapter.prototype.addContentControl = function (type, properties, content, isHtml, options) {
         return new Promise(function (resolve) {
             if (typeof window === "undefined" || !window.Asc || !window.Asc.plugin) {
                 log("error", "OnlyOfficeAdapter.missingPlugin", {});
@@ -252,33 +255,37 @@
                 var internalId = ctrl ? (ctrl.InternalId || ctrl.Id || "") : "";
                 log("info", "OnlyOfficeAdapter.addContentControl", { type: type, tag: tag, internalId: internalId });
 
+                if (!internalId) {
+                    resolve(tag);
+                    return;
+                }
+
+                var script = "";
                 if (isHtml) {
-                    // Block HTML for bibliography
-                    if (internalId) {
-                        window.Asc.plugin.executeMethod("SelectContentControl", [internalId], function () {
-                            window.Asc.plugin.executeMethod("PasteHtml", [content], function () {
-                                resolve(internalId);
-                            });
-                        });
-                    } else {
-                        window.Asc.plugin.executeMethod("PasteHtml", [content], function () {
-                            resolve(tag);
-                        });
+                    try {
+                        var helper = DocBuilderHelper || (typeof window !== "undefined" && window.MendeleyApp && window.MendeleyApp.DocBuilderHelper);
+                        if (helper && helper.buildBibliographyScript) {
+                            script = helper.buildBibliographyScript(content, options);
+                        }
+                    } catch (e) {
+                        log("warn", "OnlyOfficeAdapter.buildBibliographyScript.fallback", { error: String(e) });
+                    }
+                    if (!script) {
+                        var plain = String(content || "").replace(/<[^>]+>/g, "").trim();
+                        script = "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(plain) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});";
                     }
                 } else {
-                    // Inline text for citations via InsertAndReplaceContentControls
-                    if (internalId) {
-                        var arr = [{
-                            Props: { InternalId: internalId, Tag: tag },
-                            Script: "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(cleanText) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});"
-                        }];
-                        window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function () {
-                            resolve(internalId);
-                        });
-                    } else {
-                        resolve(tag);
-                    }
+                    script = "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(cleanText) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});";
                 }
+
+                var arr = [{
+                    Props: { InternalId: internalId, Tag: tag },
+                    Script: script
+                }];
+                window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function () {
+                    log("info", "OnlyOfficeAdapter.addContentControl.populated", { internalId: internalId, isHtml: !!isHtml });
+                    resolve(internalId);
+                });
             });
         });
     };
@@ -331,17 +338,33 @@
         });
     };
 
-    OnlyOfficeAdapter.prototype.updateControlHtml = function (internalId, html) {
+    OnlyOfficeAdapter.prototype.updateControlHtml = function (internalId, html, options) {
         return new Promise(function (resolve) {
             if (typeof window === "undefined" || !window.Asc || !window.Asc.plugin) {
                 resolve();
                 return;
             }
-            window.Asc.plugin.executeMethod("SelectContentControl", [internalId], function () {
-                window.Asc.plugin.executeMethod("PasteHtml", [html], function () {
-                    log("info", "OnlyOfficeAdapter.updateControlHtml", { internalId: internalId });
-                    resolve();
-                });
+            var script = "";
+            try {
+                var helper = DocBuilderHelper || (typeof window !== "undefined" && window.MendeleyApp && window.MendeleyApp.DocBuilderHelper);
+                if (helper && helper.buildBibliographyScript) {
+                    script = helper.buildBibliographyScript(html, options);
+                }
+            } catch (e) {
+                log("warn", "OnlyOfficeAdapter.updateControlHtml.fallback", { error: String(e) });
+            }
+            if (!script) {
+                var plain = String(html || "").replace(/<[^>]+>/g, "").trim();
+                script = "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(plain) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});";
+            }
+
+            var arr = [{
+                Props: { InternalId: internalId },
+                Script: script
+            }];
+            window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function () {
+                log("info", "OnlyOfficeAdapter.updateControlHtml", { internalId: internalId });
+                resolve();
             });
         });
     };
@@ -467,11 +490,11 @@
         });
     };
 
-    DocumentModule.prototype.insertBibliography = function (html) {
+    DocumentModule.prototype.insertBibliography = function (html, options) {
         var rawHtml = (html && html.join) ? html.join("") : String(html || "");
         var self = this;
         if (self.adapter && self.adapter.addContentControl) {
-            return self.adapter.addContentControl(1, { Tag: BIB_TAG, Lock: 0, PlaceHolderText: "Bibliography" }, rawHtml, true).then(function (res) {
+            return self.adapter.addContentControl(1, { Tag: BIB_TAG, Lock: 0, PlaceHolderText: "Bibliography" }, rawHtml, true, options).then(function (res) {
                 log("success", "DocumentModule.insertBibliography", {});
                 return res;
             });
@@ -503,9 +526,9 @@
         });
     };
 
-    DocumentModule.prototype.updateBibliographyHtml = function (internalId, html) {
+    DocumentModule.prototype.updateBibliographyHtml = function (internalId, html, options) {
         var rawHtml = (html && html.join) ? html.join("") : String(html || "");
-        return this.adapter.updateControlHtml(internalId, rawHtml).then(function () {
+        return this.adapter.updateControlHtml(internalId, rawHtml, options).then(function () {
             log("success", "DocumentModule.updateBibliographyHtml", { internalId: internalId });
         });
     };
