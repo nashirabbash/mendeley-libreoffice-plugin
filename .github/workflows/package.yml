@@ -27,7 +27,7 @@ jobs:
       - name: Stage plugin payload
         run: |
           mkdir -p dist/package/plugin dist/package/bin dist/package/packaging/linux
-          cp -R index.html oauth.html config.json scripts resources translations vendor thirdparty citeproc mendeley-sdk licenses dist/package/plugin/
+          cp -R index.html oauth.html config.json scripts resources translations vendor licenses dist/package/plugin/
           rm -f dist/package/plugin/scripts/mendeley-loopback-server.py
           cp dist/mendeley-loopback-server dist/package/bin/
           cp packaging/linux/install-user.sh packaging/linux/uninstall-user.sh dist/package/packaging/linux/
@@ -69,7 +69,7 @@ jobs:
       - shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist/plugin | Out-Null
-          Copy-Item index.html,oauth.html,config.json,scripts,resources,translations,vendor,thirdparty,citeproc,mendeley-sdk,licenses dist/plugin -Recurse
+          Copy-Item index.html,oauth.html,config.json,scripts,resources,translations,vendor,licenses dist/plugin -Recurse
           New-Item -ItemType Directory -Force dist/windows | Out-Null
           Copy-Item dist/mendeley-loopback-server.exe "dist/windows/mendeley-loopback-server.exe"
       - run: choco install innosetup --yes --no-progress
