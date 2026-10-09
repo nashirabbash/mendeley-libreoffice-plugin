@@ -11,17 +11,21 @@ description: Per-user Mendeley loopback helper and ONLYOFFICE plugin payload
 contents:
   - src: ${STAGE}/bin/mendeley-loopback-server
     dst: /opt/mendeley-onlyoffice/bin/mendeley-loopback-server
+    expand: true
     file_info:
       mode: 0755
   - src: ${STAGE}/plugin/
     dst: /opt/mendeley-onlyoffice/plugin
+    expand: true
     type: tree
   - src: ${STAGE}/packaging/linux/install-user.sh
     dst: /opt/mendeley-onlyoffice/packaging/linux/install-user.sh
+    expand: true
     file_info:
       mode: 0755
   - src: ${STAGE}/packaging/linux/uninstall-user.sh
     dst: /opt/mendeley-onlyoffice/packaging/linux/uninstall-user.sh
+    expand: true
     file_info:
       mode: 0755
   - dst: /usr/bin/mendeley-onlyoffice-setup
