@@ -44,12 +44,23 @@ jobs:
         run: |
           nfpm package --config packaging/linux/nfpm.yaml --packager deb --target dist/
           nfpm package --config packaging/linux/nfpm.yaml --packager rpm --target dist/
+      - name: Build LibreOffice Writer extension
+        if: matrix.arch == 'amd64'
+        run: |
+          archive=node-v22.20.0-linux-x64.tar.xz
+          curl --fail --location --silent --show-error "https://nodejs.org/dist/v22.20.0/$archive" --output "$archive"
+          echo "00bbd05e306ea68b6e13e17360d0e2f680b493ef95f2fea1c4296ff7437530bc  $archive" | sha256sum --check
+          tar -xJf "$archive"
+          NODE_BIN="$PWD/node-v22.20.0-linux-x64/bin/node" \
+          NODE_LICENSE="$PWD/node-v22.20.0-linux-x64/LICENSE" \
+            packaging/libreoffice/build-oxt.sh
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
           path: |
             dist/*.deb
             dist/*.rpm
+            dist/*.oxt
 
   windows:
     strategy:

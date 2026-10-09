@@ -1,5 +1,9 @@
 # Change Log
 
+## Unreleased
+
+- Added Linux x86_64 LibreOffice Writer `.oxt` with Writer-only Mendeley sidebar, asynchronous bundled Node.js status worker, and checksum-verified Node.js packaging.
+
 ## 1.1.1
 
 - Auto-synced active Mendeley Reference Manager session token across Linux, Windows, and macOS, allowing seamless zero-config login without manual Application ID input.
