@@ -1,5 +1,11 @@
 # Change Log
 
+## 1.0.3
+- Fixed content control placeholder bug: pass `PlaceHolderText` with rendered citation text directly to `AddContentControl` (derived from ONLYOFFICE SDK `readContentControlCommonPr`), preventing default "Your text here".
+- Replaced invalid `ctrl.GetRange()` calls on `ApiInlineLvlSdt` inside `callCommand` with official `InsertAndReplaceContentControls` targeting `InternalId`.
+- Switched bibliography HTML updates to `SelectContentControl` + `PasteHtml`.
+- Added regression test in `tests/document.test.js` asserting `PlaceHolderText` propagation.
+
 ## 1.0.2
 - Deep DocumentModule introduced at Document Seam (`scripts/document.js`).
 - Added OnlyOfficeAdapter and InMemoryAdapter for automated testability outside Document Server.

@@ -79,6 +79,7 @@
         var control = {
             internalId: "inmem_ctrl_" + this.nextId++,
             tag: properties.Tag || "",
+            placeHolderText: properties.PlaceHolderText,
             text: isHtml ? String(content || "").replace(/<[^>]+>/g, "") : (content || ""),
             html: content || "",
             type: type
@@ -237,37 +238,47 @@
                 return;
             }
             var tag = properties.Tag || "";
+            var cleanText = isHtml ? String(content || "") : String(content || "").replace(/<[^>]+>/g, "");
+            var placeholder = properties.PlaceHolderText || cleanText;
 
-            // 1. Insert content control with tag
-            window.Asc.plugin.executeMethod("AddContentControl", [type, { Tag: tag, Lock: 0 }], function () {
-                // 2. Clear default placeholder ("Your text here") and insert actual content
-                window.Asc.plugin.callCommand(function () {
-                    var oDoc = Api.GetDocument();
-                    var aControls = (oDoc.GetContentControlsByTag) ? oDoc.GetContentControlsByTag(Asc.scope.tag) : null;
-                    if (!aControls || !aControls.length) {
-                        var all = oDoc.GetAllContentControls();
-                        aControls = [];
-                        for (var i = 0; i < all.length; i++) {
-                            if (all[i].GetTag && all[i].GetTag() === Asc.scope.tag) {
-                                aControls.push(all[i]);
-                            }
-                        }
-                    }
+            var props = {
+                Tag: tag,
+                Lock: 0,
+                PlaceHolderText: placeholder
+            };
 
-                    if (aControls && aControls.length > 0) {
-                        var ctrl = aControls[aControls.length - 1];
-                        var oRange = ctrl.GetRange();
-                        oRange.Delete();
-                        if (Asc.scope.isHtml) {
-                            oRange.PasteHtml(Asc.scope.content);
-                        } else {
-                            oRange.AddText(Asc.scope.content);
-                        }
+            // 1. AddContentControl with PlaceHolderText so "Your text here" never renders
+            window.Asc.plugin.executeMethod("AddContentControl", [type, props], function (ctrl) {
+                var internalId = ctrl ? (ctrl.InternalId || ctrl.Id || "") : "";
+                log("info", "OnlyOfficeAdapter.addContentControl", { type: type, tag: tag, internalId: internalId });
+
+                if (isHtml) {
+                    // Block HTML for bibliography
+                    if (internalId) {
+                        window.Asc.plugin.executeMethod("SelectContentControl", [internalId], function () {
+                            window.Asc.plugin.executeMethod("PasteHtml", [content], function () {
+                                resolve(internalId);
+                            });
+                        });
+                    } else {
+                        window.Asc.plugin.executeMethod("PasteHtml", [content], function () {
+                            resolve(tag);
+                        });
                     }
-                }, false, true, function () {
-                    log("info", "OnlyOfficeAdapter.addContentControl", { type: type, tag: tag });
-                    resolve(tag);
-                }, { tag: tag, content: content, isHtml: !!isHtml });
+                } else {
+                    // Inline text for citations via InsertAndReplaceContentControls
+                    if (internalId) {
+                        var arr = [{
+                            Props: { InternalId: internalId, Tag: tag },
+                            Script: "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(cleanText) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});"
+                        }];
+                        window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function () {
+                            resolve(internalId);
+                        });
+                    } else {
+                        resolve(tag);
+                    }
+                }
             });
         });
     };
@@ -308,19 +319,15 @@
                 resolve();
                 return;
             }
-            window.Asc.plugin.callCommand(function () {
-                var oDoc = Api.GetDocument();
-                var aControls = oDoc.GetAllContentControls();
-                for (var i = 0; i < aControls.length; i++) {
-                    if (aControls[i].GetInternalId() === Asc.scope.ctrlId) {
-                        aControls[i].GetRange().Delete();
-                        aControls[i].GetRange().AddText(Asc.scope.cleanText);
-                    }
-                }
-            }, false, true, function () {
+            var cleanText = String(text || "").replace(/<[^>]+>/g, "");
+            var arr = [{
+                Props: { InternalId: internalId },
+                Script: "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(cleanText) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});"
+            }];
+            window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function () {
                 log("info", "OnlyOfficeAdapter.updateControlText", { internalId: internalId });
                 resolve();
-            }, { ctrlId: internalId, cleanText: text });
+            });
         });
     };
 
@@ -330,19 +337,12 @@
                 resolve();
                 return;
             }
-            window.Asc.plugin.callCommand(function () {
-                var oDoc = Api.GetDocument();
-                var aControls = oDoc.GetAllContentControls();
-                for (var i = 0; i < aControls.length; i++) {
-                    if (aControls[i].GetInternalId() === Asc.scope.ctrlId) {
-                        aControls[i].GetRange().Delete();
-                        aControls[i].GetRange().PasteHtml(Asc.scope.rawHtml);
-                    }
-                }
-            }, false, true, function () {
-                log("info", "OnlyOfficeAdapter.updateControlHtml", { internalId: internalId });
-                resolve();
-            }, { ctrlId: internalId, rawHtml: html });
+            window.Asc.plugin.executeMethod("SelectContentControl", [internalId], function () {
+                window.Asc.plugin.executeMethod("PasteHtml", [html], function () {
+                    log("info", "OnlyOfficeAdapter.updateControlHtml", { internalId: internalId });
+                    resolve();
+                });
+            });
         });
     };
 
@@ -399,7 +399,7 @@
 
         return op.then(function () {
             if (self.adapter && self.adapter.addContentControl) {
-                return self.adapter.addContentControl(2, { Tag: base64Tag, Lock: 0 }, cleanText, false);
+                return self.adapter.addContentControl(2, { Tag: base64Tag, Lock: 0, PlaceHolderText: cleanText }, cleanText, false);
             }
             return self.adapter.addAddinField(addinField);
         }).then(function (result) {
@@ -471,7 +471,7 @@
         var rawHtml = (html && html.join) ? html.join("") : String(html || "");
         var self = this;
         if (self.adapter && self.adapter.addContentControl) {
-            return self.adapter.addContentControl(1, { Tag: BIB_TAG, Lock: 0 }, rawHtml, true).then(function (res) {
+            return self.adapter.addContentControl(1, { Tag: BIB_TAG, Lock: 0, PlaceHolderText: "Bibliography" }, rawHtml, true).then(function (res) {
                 log("success", "DocumentModule.insertBibliography", {});
                 return res;
             });

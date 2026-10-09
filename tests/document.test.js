@@ -21,8 +21,8 @@ async function runTests() {
     assert.ok(ctrlId, "Control ID must be returned");
     assert.strictEqual(inMem.controls.length, 1, "Should have 1 control in memory");
     assert.strictEqual(inMem.controls[0].text, "(Turing, 2026, p. 14)", "HTML tags must be stripped from rendered text");
+    assert.strictEqual(inMem.controls[0].placeHolderText, "(Turing, 2026, p. 14)", "PlaceHolderText must match citation text to prevent default 'Your text here'");
     assert.strictEqual(inMem.footnotesCount, 0, "No footnotes should be created for inline style");
-
     // Test 2: Read citations back
     const citations = await doc.getCitations();
     assert.strictEqual(citations.length, 1, "Should retrieve 1 citation record");
