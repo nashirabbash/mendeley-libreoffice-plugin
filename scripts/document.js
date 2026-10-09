@@ -242,50 +242,36 @@
             }
             var tag = properties.Tag || "";
             var cleanText = isHtml ? String(content || "") : String(content || "").replace(/<[^>]+>/g, "");
-            var placeholder = properties.PlaceHolderText || cleanText;
 
-            var props = {
-                Tag: tag,
-                Lock: 0,
-                PlaceHolderText: placeholder
-            };
-
-            // 1. AddContentControl with PlaceHolderText so "Your text here" never renders
-            window.Asc.plugin.executeMethod("AddContentControl", [type, props], function (ctrl) {
-                var internalId = ctrl ? (ctrl.InternalId || ctrl.Id || "") : "";
-                log("info", "OnlyOfficeAdapter.addContentControl", { type: type, tag: tag, internalId: internalId });
-
-                if (!internalId) {
-                    resolve(tag);
-                    return;
-                }
-
-                var script = "";
-                if (isHtml) {
-                    try {
-                        var helper = DocBuilderHelper || (typeof window !== "undefined" && window.MendeleyApp && window.MendeleyApp.DocBuilderHelper);
-                        if (helper && helper.buildBibliographyScript) {
-                            script = helper.buildBibliographyScript(content, options);
-                        }
-                    } catch (e) {
-                        log("warn", "OnlyOfficeAdapter.buildBibliographyScript.fallback", { error: String(e) });
+            var script = "";
+            if (isHtml) {
+                try {
+                    var helper = DocBuilderHelper || (typeof window !== "undefined" && window.MendeleyApp && window.MendeleyApp.DocBuilderHelper);
+                    if (helper && helper.buildBibliographyScript) {
+                        script = helper.buildBibliographyScript(content, options);
                     }
-                    if (!script) {
-                        var plain = String(content || "").replace(/<[^>]+>/g, "").trim();
-                        script = "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(plain) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});";
-                    }
-                } else {
-                    script = "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(cleanText) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});";
+                } catch (e) {
+                    log("warn", "OnlyOfficeAdapter.buildBibliographyScript.fallback", { error: String(e) });
                 }
+                if (!script) {
+                    var plain = String(content || "").replace(/<[^>]+>/g, "").trim();
+                    script = "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(plain) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});";
+                }
+            } else {
+                script = "var oDoc = Api.GetDocument(); var oPara = Api.CreateParagraph(); oPara.AddText(" + JSON.stringify(cleanText) + "); oDoc.InsertContent([oPara], true, {KeepTextOnly: true});";
+            }
 
-                var arr = [{
-                    Props: { InternalId: internalId, Tag: tag },
-                    Script: script
-                }];
-                window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function () {
-                    log("info", "OnlyOfficeAdapter.addContentControl.populated", { internalId: internalId, isHtml: !!isHtml });
-                    resolve(internalId);
-                });
+            var arr = [{
+                Props: {
+                    Tag: tag,
+                    Lock: 0
+                },
+                Script: script
+            }];
+
+            window.Asc.plugin.executeMethod("InsertAndReplaceContentControls", [arr], function (res) {
+                log("info", "OnlyOfficeAdapter.addContentControl.populated", { tag: tag, isHtml: !!isHtml });
+                resolve(tag);
             });
         });
     };
