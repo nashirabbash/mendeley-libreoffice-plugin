@@ -1,132 +1,255 @@
 #!/usr/bin/env python3
-"""
-Mendeley OAuth Loopback Server for ONLYOFFICE Desktop Editors
-Listens on http://127.0.0.1:8080/ to capture OAuth implicit/code token
-and writes directly to ONLYOFFICE cache & exposes local token endpoint.
-"""
+"""Mendeley OAuth loopback server for ONLYOFFICE Desktop Editors."""
 
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import urllib.parse
+import argparse
+from threading import Thread
 import os
 import sys
+from pathlib import Path
+import tempfile
+import time
+import urllib.parse
 
+HOST = "127.0.0.1"
 PORT = 8080
-SHARED_TOKEN_FILE = "/tmp/mendeley_active_token.json"
-
+SERVICE_NAME = "mendeley-loopback"
 HTML_CALLBACK = """<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Mendeley Login Successful</title>
-    <style>
-        body { font-family: -apple-system, sans-serif; text-align: center; padding: 40px; background: #fafafa; color: #333; }
-        .card { background: white; max-width: 480px; margin: 0 auto; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h2 { color: #2e7d32; margin-top: 0; }
-        p { color: #666; line-height: 1.5; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>✓ Login Berhasil!</h2>
-        <p>Token otorisasi Mendeley telah berhasil ditangkap.</p>
-        <p>Anda dapat menutup tab ini dan kembali ke <b>ONLYOFFICE</b>. Halaman daftar referensi sedang dimuat otomatis.</p>
-    </div>
-    <script>
-        // Extract token from hash and send to loopback server
-        (function() {
-            var hash = window.location.hash || "";
-            var search = window.location.search || "";
-            var token = null;
+<html><head><meta charset="UTF-8"><title>Mendeley Login Successful</title></head>
+<body><h2>Login Berhasil</h2><p>Token Mendeley diterima. Kembali ke ONLYOFFICE.</p>
+<script>
+(function () {
+    var hash = new URLSearchParams(window.location.hash.slice(1));
+    var search = new URLSearchParams(window.location.search);
+    var token = hash.get("access_token") || search.get("code");
+    if (token) {
+        fetch("/token", { method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({token: token}) });
+    }
+})();
+</script></body></html>"""
 
-            var matchToken = hash.match(/access_token=([^&]+)/);
-            if (matchToken && matchToken[1]) {
-                token = matchToken[1];
-            } else {
-                var matchCode = search.match(/code=([^&]+)/);
-                if (matchCode && matchCode[1]) token = matchCode[1];
-            }
 
-            if (token) {
-                var xhr = new XMLHttpRequest();
-                xhr.open("POST", "/token", true);
-                xhr.setRequestHeader("Content-Type", "application/json");
-                xhr.send(JSON.stringify({ token: token }));
-            }
-        })();
-    </script>
-</body>
-</html>
-"""
+def token_file_path():
+    if os.name == "nt":
+        root = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return root / "mendeley-onlyoffice" / "active-token.json"
 
-class OAuthLoopbackHandler(BaseHTTPRequestHandler):
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "*")
-        self.end_headers()
 
-    def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == "/token":
-            # Endpoint queried by ONLYOFFICE plugin to poll token
-            token = None
-            if os.path.exists(SHARED_TOKEN_FILE):
-                try:
-                    with open(SHARED_TOKEN_FILE, "r") as f:
-                        data = json.load(f)
-                        token = data.get("token")
-                except Exception:
-                    pass
+def write_token(path, token):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_path = tempfile.mkstemp(prefix=".token-", dir=str(path.parent))
+    try:
+        if os.name != "nt":
+            os.chmod(temporary_path, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as token_file:
+            json.dump({"token": token}, token_file)
+            token_file.flush()
+            os.fsync(token_file.fileno())
+        os.replace(temporary_path, path)
+        if os.name != "nt":
+            os.chmod(path, 0o600)
+    finally:
+        if os.path.exists(temporary_path):
+            os.unlink(temporary_path)
 
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(json.dumps({"token": token}).encode("utf-8"))
-            return
 
-        # Serve callback HTML to user browser on OAuth redirect
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(HTML_CALLBACK.encode("utf-8"))
+def read_token(path):
+    try:
+        with Path(path).open(encoding="utf-8") as token_file:
+            return json.load(token_file).get("token")
+    except (OSError, ValueError, TypeError):
+        return None
 
-    def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == "/token":
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
-            try:
-                data = json.loads(body.decode("utf-8"))
-                token = data.get("token")
-                if token:
-                    with open(SHARED_TOKEN_FILE, "w") as f:
-                        json.dump({"token": token, "timestamp": int(os.times()[4])}, f)
-                    print(f"[OAUTH] Token captured: {token[:20]}...")
-            except Exception as e:
-                print(f"[OAUTH ERROR] {e}")
 
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(b'{"status":"ok"}')
-
-    def log_message(self, format, *args):
+def clear_token(path):
+    try:
+        Path(path).unlink()
+    except FileNotFoundError:
         pass
 
+def make_handler(token_path):
+    class OAuthLoopbackHandler(BaseHTTPRequestHandler):
+        def _approved_origin(self):
+            origin = self.headers.get("Origin")
+            server_origin = "http://127.0.0.1:{}".format(self.server.server_port)
+            localhost_origin = "http://localhost:{}".format(self.server.server_port)
+            return origin in (None, "null", server_origin, localhost_origin)
+
+        def _approved_host(self):
+            host = self.headers.get("Host", "").split(":", 1)[0]
+            return host in ("127.0.0.1", "localhost")
+        def _send_json(self, status, payload):
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            if self.headers.get("Origin") == "null":
+                self.send_header("Access-Control-Allow-Origin", "null")
+                self.send_header("Vary", "Origin")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_OPTIONS(self):
+            if not self._approved_origin():
+                self._send_json(403, {"error": "origin_not_allowed"})
+                return
+            self.send_response(204)
+            origin = self.headers.get("Origin")
+            if origin == "null":
+                self.send_header("Access-Control-Allow-Origin", "null")
+                self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+
+        def do_GET(self):
+            if not self._approved_host() or not self._approved_origin():
+                self._send_json(403, {"error": "origin_not_allowed"})
+                return
+            path = urllib.parse.urlparse(self.path).path
+            if path == "/health":
+                self._send_json(200, {"service": SERVICE_NAME, "status": "ok"})
+            elif path == "/token":
+                self._send_json(200, {"token": read_token(token_path)})
+            elif path == "/" or path == "/callback":
+                body = HTML_CALLBACK.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self._send_json(404, {"error": "not_found"})
+
+        def do_POST(self):
+            if not self._approved_host() or not self._approved_origin():
+                self._send_json(403, {"error": "origin_not_allowed"})
+                return
+            path = urllib.parse.urlparse(self.path).path
+            if path == "/shutdown":
+                self._send_json(200, {"status": "stopping"})
+                Thread(target=self.server.shutdown, daemon=True).start()
+                return
+            if path != "/token":
+                self._send_json(404, {"error": "not_found"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 16384:
+                    raise ValueError("invalid body size")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                token = payload.get("token") if isinstance(payload, dict) else None
+                if not isinstance(token, str) or not token or len(token) > 8192:
+                    raise ValueError("invalid token")
+                write_token(token_path, token)
+                print(json.dumps({"level": "success", "event": "oauth.token_captured"}), flush=True)
+                self._send_json(200, {"status": "ok"})
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+                print(json.dumps({"level": "error", "event": "oauth.token_rejected", "data": {"error": str(error)}}), flush=True)
+                self._send_json(400, {"error": "invalid_token_payload"})
+
+        def do_DELETE(self):
+            if not self._approved_host() or not self._approved_origin():
+                self._send_json(403, {"error": "origin_not_allowed"})
+                return
+            if urllib.parse.urlparse(self.path).path != "/token":
+                self._send_json(404, {"error": "not_found"})
+                return
+            clear_token(token_path)
+            self._send_json(200, {"status": "cleared"})
+        def log_message(self, format, *args):
+            print(json.dumps({"level": "info", "event": "http.request", "data": {"message": format % args}}), flush=True)
+
+    return OAuthLoopbackHandler
+
+
+def create_server(host=HOST, port=PORT, token_path=None):
+    return ThreadingHTTPServer((host, port), make_handler(token_path or token_file_path()))
+
+
+def start_or_reuse_server(host=HOST, port=PORT, token_path=None):
+    try:
+        return create_server(host, port, token_path)
+    except OSError:
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:{}/health".format(port), timeout=2) as response:
+                health = json.load(response)
+            if health == {"service": SERVICE_NAME, "status": "ok"}:
+                print(json.dumps({"level": "info", "event": "server.reused", "data": {"port": port}}), flush=True)
+                return None
+        except (OSError, ValueError):
+            pass
+        raise
+
+
+def stop_server(port=PORT):
+    import urllib.request
+
+    endpoint = "http://127.0.0.1:{}".format(port)
+    try:
+        with urllib.request.urlopen(endpoint + "/health", timeout=2) as response:
+            health = json.load(response)
+        if health != {"service": SERVICE_NAME, "status": "ok"}:
+            print(json.dumps({"level": "error", "event": "server.stop_refused", "data": {"port": port}}), flush=True)
+            return False
+        request = urllib.request.Request(endpoint + "/shutdown", data=b"", method="POST")
+        with urllib.request.urlopen(request, timeout=2):
+            pass
+        for attempt in range(20):
+            try:
+                with urllib.request.urlopen(endpoint + "/health", timeout=0.2) as response:
+                    if json.load(response) != {"service": SERVICE_NAME, "status": "ok"}:
+                        return True
+            except OSError:
+                return True
+            time.sleep(0.1)
+        return False
+    except OSError:
+        return False
+
+
 def run():
-    server = HTTPServer(("127.0.0.1", PORT), OAuthLoopbackHandler)
-    print(f"Mendeley OAuth Loopback Server running on http://127.0.0.1:{PORT}/")
+    try:
+        server = start_or_reuse_server()
+    except OSError as error:
+        print(json.dumps({"level": "error", "event": "server.start_failed", "data": {"error": str(error), "port": PORT}}), flush=True)
+        raise
+    if server is None:
+        return
+    print(json.dumps({"level": "success", "event": "server.started", "data": {"host": HOST, "port": PORT}}), flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
+        print(json.dumps({"level": "info", "event": "server.stopped"}), flush=True)
+
+
+def configure_logging():
+    log_path = token_file_path().parent / "helper.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_file = log_path.open("a", encoding="utf-8", buffering=1)
+    if os.name != "nt":
+        os.chmod(log_path, 0o600)
+    sys.stdout = log_file
+    sys.stderr = log_file
 
 if __name__ == "__main__":
-    run()
+    configure_logging()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stop", action="store_true")
+    arguments = parser.parse_args()
+    if arguments.stop:
+        stop_server()
+    else:
+        run()

@@ -24,55 +24,36 @@ Mendeley plugin lets users search their Mendeley library and insert formatted ci
 - **ONLYOFFICE Desktop Editors** (recommended) or Document Server
 - **Mendeley account** — [mendeley.com](https://www.mendeley.com)
 - **Mendeley OAuth app** — register at [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html)
-- **Python 3** (only for Desktop Editors loopback auth server)
 - **Node.js** (only for running tests)
 
 ---
 
 ## Installation
 
-### Option A — ONLYOFFICE Desktop Editors (Linux)
+### Option A — ONLYOFFICE Desktop Editors
 
-This is the recommended path for local development and personal use.
+Install ONLYOFFICE Desktop Editors first. These packages add the Mendeley plugin and helper; they do not install or replace ONLYOFFICE.
 
-#### 1. Clone the repo
+#### Linux
 
-```bash
-git clone https://github.com/nashirabbash/plugin-mendeley.git
-```
-
-#### 2. Symlink the plugin into ONLYOFFICE's plugin directory
+Install the matching `.deb` or `.rpm` package for Linux x64 or ARM64. Then run:
 
 ```bash
-PLUGIN_DIR="$HOME/.var/app/org.onlyoffice.desktopeditors/data/onlyoffice/desktopeditors/sdkjs-plugins"
-
-# Create the plugins directory if it doesn't exist
-mkdir -p "$PLUGIN_DIR"
-
-# Symlink this repo as the plugin folder
-ln -s "$(pwd)/plugin-mendeley" "$PLUGIN_DIR/nashirabbash-mendeley"
+mendeley-onlyoffice-setup
 ```
 
-> If ONLYOFFICE is installed natively (not Flatpak), the path is:
-> `~/.local/share/onlyoffice/desktopeditors/sdkjs-plugins/`
+Choose the ONLYOFFICE installation shown. Setup copies the plugin into that user's plugin directory, adds a per-user XDG Autostart entry, and starts helper immediately. It starts again at next login; no Python install or manual server command is needed.
 
-#### 3. Start the OAuth loopback server
+Run `mendeley-onlyoffice-remove` before removing the package to delete the selected plugin, autostart entry, running helper, and local token.
 
-The loopback server captures the Mendeley OAuth token and exposes it to the plugin on `http://127.0.0.1:8080/token`.
+#### Windows
 
-```bash
-python3 scripts/mendeley-loopback-server.py
-```
+Run `Mendeley-ONLYOFFICE-Setup.exe`, choose the ONLYOFFICE plugin directory, and finish setup. The helper starts immediately and at user login through `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`.
 
-Keep this running in a terminal while using the plugin. To run it in the background:
+#### Launch ONLYOFFICE
 
-```bash
-python3 scripts/mendeley-loopback-server.py &
-```
+Open existing ONLYOFFICE Desktop Editors. Mendeley appears in the **Plugins** tab. Installers target x64 and ARM64. OAuth keeps fixed `127.0.0.1:8080`; an existing Mendeley helper is reused. If another application owns the port, login reports conflict.
 
-#### 4. Open ONLYOFFICE Desktop Editors
-
-Launch the app. The Mendeley plugin appears in the **Plugins** tab of the Document Editor.
 
 ---
 

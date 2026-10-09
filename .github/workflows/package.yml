@@ -1,0 +1,96 @@
+name: Build Mendeley installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pyinstaller
+      - run: pyinstaller --onefile --name mendeley-loopback-server scripts/mendeley-loopback-server.py
+      - name: Stage plugin payload
+        run: |
+          mkdir -p dist/package/plugin dist/package/bin dist/package/packaging/linux
+          cp -R index.html oauth.html config.json scripts resources translations vendor thirdparty citeproc mendeley-sdk licenses dist/package/plugin/
+          rm -f dist/package/plugin/scripts/mendeley-loopback-server.py
+          cp dist/mendeley-loopback-server dist/package/bin/
+          cp packaging/linux/install-user.sh packaging/linux/uninstall-user.sh dist/package/packaging/linux/
+          chmod +x dist/package/bin/mendeley-loopback-server dist/package/packaging/linux/*.sh
+      - name: Install nfpm
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Build Debian and RPM packages
+        env:
+          VERSION: 1.1.0
+          NFPM_ARCH: ${{ matrix.arch }}
+          STAGE: dist/package
+        run: |
+          nfpm package --config packaging/linux/nfpm.yaml --packager deb --target dist/
+          nfpm package --config packaging/linux/nfpm.yaml --packager rpm --target dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pyinstaller
+      - run: pyinstaller --onefile --noconsole --name mendeley-loopback-server scripts/mendeley-loopback-server.py
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/plugin | Out-Null
+          Copy-Item index.html,oauth.html,config.json,scripts,resources,translations,vendor,thirdparty,citeproc,mendeley-sdk,licenses dist/plugin -Recurse
+          New-Item -ItemType Directory -Force dist/windows | Out-Null
+          Copy-Item dist/mendeley-loopback-server.exe "dist/windows/mendeley-loopback-server.exe"
+      - run: choco install innosetup --yes --no-progress
+      - shell: pwsh
+        run: iscc /DArch=${{ matrix.arch }} packaging/windows/mendeley.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: dist/installers/*.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/**/*

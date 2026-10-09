@@ -15,60 +15,33 @@
 
     var authFlow = {
         authenticate: function () {
-            if (typeof localStorage !== "undefined") {
-                localStorage.removeItem("mendToken");
-            }
-            if (typeof window !== "undefined") {
-                window._activeMendToken = null;
-            }
-            if (Helpers && Helpers.showLoader) Helpers.showLoader(true);
-
-            loginStateHash = new Date().getTime();
-            var app = (typeof window !== "undefined" && window.MendeleyApp) || {};
-            var appId = app.mendAppId || (Helpers && Helpers.getSettings && Helpers.getSettings()) || "26014";
-            var redirectUrl = app.redirectUrl || "";
-
-            if (Logger && typeof Logger.info === "function") {
-                Logger.info("Auth.authenticate.start", { appId: appId, redirectUrl: redirectUrl });
-            }
-
-            var link = "https://api.mendeley.com/oauth/authorize?client_id=" + appId + "&redirect_uri=" + encodeURI(redirectUrl) + "&response_type=token&scope=all&state=" + loginStateHash;
+            if (typeof localStorage !== "undefined") localStorage.removeItem("mendToken");
+            if (typeof window !== "undefined") window._activeMendToken = null;
             if (typeof window !== "undefined" && window.Asc && window.Asc.plugin && window.Asc.plugin.mendeley && window.Asc.plugin.mendeley.auth) {
-                link = window.Asc.plugin.mendeley.auth();
+                startAuthentication();
+                return;
             }
-
-            var wnd = null;
-            try {
-                wnd = window.open(link, null, "width=500,height=700");
-            } catch (e) {}
-
-            var timer = setInterval(function () {
-                var savedToken = (typeof localStorage !== "undefined") ? localStorage.getItem("mendToken") : null;
-                if (savedToken) {
-                    clearInterval(timer);
-                    if (typeof window !== "undefined") window._activeMendToken = savedToken;
-                    if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
-                    switchAuthState("main");
-                    if (app.loadFilteredLibrary) app.loadFilteredLibrary(false);
-                    if (wnd && !wnd.closed) { try { wnd.close(); } catch (e) {} }
-                    return;
+            fetch("http://127.0.0.1:8080/health").then(function (response) {
+                if (!response.ok) throw new Error("Mendeley Helper tidak merespons pada port 8080.");
+                return response.json();
+            }).then(function (health) {
+                if (!health || health.service !== "mendeley-loopback" || health.status !== "ok") {
+                    throw new Error("Port 8080 dipakai aplikasi lain. Tutup aplikasi tersebut, lalu coba lagi.");
                 }
-                // Poll local loopback server
-                fetch("http://127.0.0.1:8080/token")
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data && data.token) {
-                            if (typeof localStorage !== "undefined") localStorage.setItem("mendToken", data.token);
-                            if (typeof window !== "undefined") window._activeMendToken = data.token;
-                            clearInterval(timer);
-                            if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
-                            switchAuthState("main");
-                            if (app.loadFilteredLibrary) app.loadFilteredLibrary(false);
-                            if (wnd && !wnd.closed) { try { wnd.close(); } catch (e) {} }
-                        }
-                    })
-                    .catch(function () {});
-            }, 1000);
+                return fetch("http://127.0.0.1:8080/token", { method: "DELETE" });
+            }).then(function (response) {
+                if (!response.ok) throw new Error("Tidak dapat menyiapkan Mendeley Helper untuk login.");
+                startAuthentication();
+            }).catch(function (error) {
+                if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
+                if (Logger && typeof Logger.error === "function") {
+                    Logger.error("Auth.loopback.unavailable", { error: String(error) });
+                }
+                var message = /fetch|network/i.test(error.message || "")
+                    ? "Mendeley Helper tidak berjalan atau port 8080 dipakai aplikasi lain."
+                    : error.message;
+                if (Helpers && Helpers.showError) Helpers.showError(message);
+            });
         },
         getToken: function () {
             var token = (typeof window !== "undefined" && window._activeMendToken) ||
@@ -79,6 +52,61 @@
             return false;
         }
     };
+
+    function startAuthentication() {
+        loginStateHash = new Date().getTime();
+        var app = (typeof window !== "undefined" && window.MendeleyApp) || {};
+        var appId = app.mendAppId || (Helpers && Helpers.getSettings && Helpers.getSettings()) || "26014";
+        var redirectUrl = app.redirectUrl || "";
+
+        if (Logger && typeof Logger.info === "function") {
+            Logger.info("Auth.authenticate.start", { appId: appId, redirectUrl: redirectUrl });
+        }
+
+        var link = "https://api.mendeley.com/oauth/authorize?client_id=" + appId + "&redirect_uri=" + encodeURI(redirectUrl) + "&response_type=token&scope=all&state=" + loginStateHash;
+        if (window.Asc && window.Asc.plugin && window.Asc.plugin.mendeley && window.Asc.plugin.mendeley.auth) {
+            link = window.Asc.plugin.mendeley.auth();
+        }
+
+        var wnd = null;
+        try {
+            wnd = window.open(link, null, "width=500,height=700");
+        } catch (e) {}
+
+        var timer = setInterval(function () {
+            var savedToken = (typeof localStorage !== "undefined") ? localStorage.getItem("mendToken") : null;
+            if (savedToken) {
+                completeAuthentication(timer, savedToken, wnd);
+                return;
+            }
+            fetch("http://127.0.0.1:8080/token")
+                .then(function (response) {
+                    if (!response.ok) throw new Error("Mendeley Helper tidak dapat membaca token.");
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (data && data.token) completeAuthentication(timer, data.token, wnd);
+                })
+                .catch(function (error) {
+                    if (Logger && typeof Logger.warn === "function") {
+                        Logger.warn("Auth.loopback.poll.error", { error: String(error) });
+                    }
+                });
+        }, 1000);
+    }
+
+    function completeAuthentication(timer, token, wnd) {
+        clearInterval(timer);
+        if (typeof localStorage !== "undefined") localStorage.setItem("mendToken", token);
+        if (typeof window !== "undefined") window._activeMendToken = token;
+        if (Helpers && Helpers.showLoader) Helpers.showLoader(false);
+        switchAuthState("main");
+        var app = (typeof window !== "undefined" && window.MendeleyApp) || {};
+        if (app.loadFilteredLibrary) app.loadFilteredLibrary(false);
+        if (wnd && !wnd.closed) {
+            try { wnd.close(); } catch (e) {}
+        }
+    }
 
     function configState(hide) {
         var el = (typeof window !== "undefined" && window.MendeleyApp && window.MendeleyApp.elements) || {};

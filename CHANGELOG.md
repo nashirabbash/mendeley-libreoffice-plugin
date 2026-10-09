@@ -1,5 +1,12 @@
 # Change Log
 
+## 1.1.0
+- Added per-user Linux `.deb`/`.rpm` and Windows installers with x64/ARM64 build matrix.
+- Bundled OAuth loopback helper so end users do not install Python or run the server manually.
+- Added per-user XDG Autostart and Windows `HKCU\...\Run` startup, immediate start after setup, and stop-on-uninstall.
+- Added helper health, safe reuse on port `8080`, conflict errors, owner-only token storage, and JSON log file.
+- Added plugin target selection and per-user setup/removal scripts.
+
 ## 1.0.5
 - Fixed empty bibliography Content Control bug by rendering formatted bibliography via ONLYOFFICE DocumentBuilder API (`InsertAndReplaceContentControls`).
 - Created `scripts/docbuilder-helper.js` for modular HTML-to-DocBuilder script parsing with italic/bold runs, entity decoding, and plain text fallback.
