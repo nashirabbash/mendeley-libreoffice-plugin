@@ -37,7 +37,7 @@ This plugin brings a Mendeley Cite-style workflow to ONLYOFFICE on Linux, so you
 
 ### LibreOffice Writer
 
-The Linux x86_64 `.oxt` installs a Mendeley sidebar in Writer 7.5 or newer and bundles Node.js 22.20.0. No system Node.js installation is required. Download `mendeley-writer-linux-x86_64.oxt` from [Releases](https://github.com/nashirabbash/mendeley-libreoffice-plugin/releases) and install it through **Tools → Extensions**. Use **Connect to Mendeley Desktop** or **Login to Mendeley (Web)**, then search references by title, author, or year in the Writer sidebar. OAuth callbacks require a matching single-use state; Writer tokens are stored separately with owner-only permissions, cleared on logout, and never written to documents or logs.
+The Linux x86_64 `.oxt` installs a Mendeley sidebar in Writer 7.5 or newer and bundles Node.js 22.20.0. No system Node.js installation is required. Download `mendeley-writer-linux-x86_64.oxt` from [Releases](https://github.com/nashirabbash/mendeley-libreoffice-plugin/releases) and install it through **Tools → Extensions**. The sidebar opens on the workspace-style login screen; search controls appear after connecting to Mendeley Desktop or signing in through Mendeley Web. Search references by title, author, or year. OAuth callbacks require a matching single-use state; Writer tokens are stored separately with owner-only permissions, cleared on logout, and never written to documents or logs.
 
 ### ONLYOFFICE Desktop Editors
 

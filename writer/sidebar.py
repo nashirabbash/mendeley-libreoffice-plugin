@@ -66,18 +66,19 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
         container.setModel(model)
         container.createPeer(toolkit, self.parent)
 
-        label = self._add_control(manager, container, "status", "com.sun.star.awt.UnoControlFixedText", 8, 8, 224, 32)
-        label.getModel().setPropertyValue("Label", "Connect Mendeley Desktop to search your library.")
-        label.getModel().setPropertyValue("MultiLine", True)
-        self.status_text = label
-
-        self._add_button(manager, container, "connect", "Connect to Mendeley Desktop", 8, 44, 224, 28)
-        self._add_button(manager, container, "webLogin", "Login to Mendeley (Web)", 8, 78, 224, 28)
-        self.search_field = self._add_control(manager, container, "searchField", "com.sun.star.awt.UnoControlEdit", 8, 112, 224, 28)
+        self.intro = self._add_control(manager, container, "intro", "com.sun.star.awt.UnoControlFixedText", 8, 16, 224, 50)
+        self.intro.getModel().setPropertyValue("Label", "Search your Mendeley library by author, title, or year.")
+        self.intro.getModel().setPropertyValue("MultiLine", True)
+        self.connect_button = self._add_button(manager, container, "connect", "Connect to Mendeley Desktop", 8, 76, 224, 30)
+        self.web_login_button = self._add_button(manager, container, "webLogin", "Login to Mendeley (Web)", 8, 114, 224, 30)
+        self.status_text = self._add_control(manager, container, "status", "com.sun.star.awt.UnoControlFixedText", 8, 160, 224, 48)
+        self.status_text.getModel().setPropertyValue("MultiLine", True)
+        self.search_field = self._add_control(manager, container, "searchField", "com.sun.star.awt.UnoControlEdit", 8, 52, 224, 28)
         self.search_field.getModel().setPropertyValue("Text", "")
-        self._add_button(manager, container, "search", "Search title, author, or year", 8, 148, 224, 28)
-        self.results = self._add_control(manager, container, "results", "com.sun.star.awt.UnoControlListBox", 8, 184, 224, 200)
-        self._add_button(manager, container, "logout", "Log out", 8, 392, 224, 28)
+        self.search_button = self._add_button(manager, container, "search", "Search title, author, or year", 8, 88, 224, 28)
+        self.results = self._add_control(manager, container, "results", "com.sun.star.awt.UnoControlListBox", 8, 124, 224, 260)
+        self.logout_button = self._add_button(manager, container, "logout", "Log out", 8, 392, 224, 28)
+        self._set_logged_in(False)
         return container
 
     def _add_control(self, manager, container, name, service, x, y, width, height):
@@ -94,6 +95,17 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
         button.setActionCommand(command)
         button.addActionListener(self.action_listener)
         return button
+    def _set_logged_in(self, connected):
+        self.connect_button.setVisible(not connected)
+        self.web_login_button.setVisible(not connected)
+        self.intro.setVisible(not connected)
+        for control in (self.search_field, self.search_button, self.results, self.logout_button):
+            control.setVisible(connected)
+        self.status_text.setPosSize(8, 8 if connected else 160, 224, 48, 15)
+        if not connected:
+            self.search_field.setText("")
+            self._replace_results([])
+        log_event("info", "writer.panel.auth_state", {"connected": connected})
 
     def _start_loopback_server(self):
         helper = os.path.join(os.path.dirname(os.path.abspath(__file__)), "loopback-server.py")
@@ -114,7 +126,6 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
             result = self._run_worker({"command": "status"})
             if result != {"status": "ok", "service": "mendeley-writer-worker"}:
                 raise RuntimeError("Worker returned unexpected status")
-            self._show_status("Connect Mendeley Desktop to search your library.")
             log_event("success", "writer.worker.ready")
         except Exception as error:
             self._show_status("Mendeley worker unavailable. Reinstall extension or restore bundled Node.js.")
@@ -168,7 +179,7 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
         elif command == "logout":
             self.oauth_generation += 1
             self.access_token = None
-            self._replace_results([])
+            self._set_logged_in(False)
             self._show_status("Logged out.")
             threading.Thread(target=self._worker_action, args=(command, None, self.oauth_generation), daemon=True).start()
 
@@ -229,11 +240,13 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
             self._open_oauth(result["url"], payload[2])
         elif command == "oauth_token" and result.get("status") == "ok":
             self.access_token = result.get("token")
+            self._set_logged_in(True)
             self._show_status("Connected. Search by title, author, or year.")
         elif command == "oauth_error":
             self._show_status("Mendeley sign-in failed or expired. Try again.")
         elif result.get("status") == "unauthorized":
             self.access_token = None
+            self._set_logged_in(False)
             self._replace_results([])
             self._show_status("Mendeley session expired. Connect again.")
         elif result.get("status") == "pending":
@@ -242,6 +255,7 @@ class MendeleyPanel(unohelper.Base, XSidebarPanel, XToolPanel, XUIElement):
             self._show_status(result.get("error", "Mendeley request failed."))
         elif command == "desktop_login":
             self.access_token = result.get("token")
+            self._set_logged_in(True)
             self._show_status("Connected. Search by title, author, or year.")
         elif command == "search":
             self._replace_results(result.get("items", []))
