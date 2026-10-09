@@ -96,6 +96,21 @@
         log("debug", "InMemoryAdapter.addFootnote", { totalFootnotes: this.footnotesCount });
         return Promise.resolve();
     };
+    InMemoryAdapter.prototype.addNoteCitation = function (tag, cleanText) {
+        this.footnotesCount++;
+        var control = {
+            internalId: "inmem_ctrl_" + this.nextId++,
+            tag: tag,
+            placeHolderText: cleanText,
+            text: cleanText,
+            html: cleanText,
+            type: 2,
+            isNoteStyle: true
+        };
+        this.controls.push(control);
+        log("info", "InMemoryAdapter.addNoteCitation", { internalId: control.internalId, tag: control.tag });
+        return Promise.resolve(control.internalId);
+    };
 
     InMemoryAdapter.prototype.updateControlText = function (internalId, text) {
         for (var i = 0; i < this.controls.length; i++) {
@@ -305,6 +320,30 @@
             });
         });
     };
+    OnlyOfficeAdapter.prototype.addNoteCitation = function (tag, cleanText) {
+        return new Promise(function (resolve) {
+            if (typeof window === "undefined" || !window.Asc || !window.Asc.plugin) {
+                log("error", "OnlyOfficeAdapter.missingPlugin", {});
+                resolve("");
+                return;
+            }
+            window.Asc.plugin.callCommand(function () {
+                var oDoc = Api.GetDocument();
+                oDoc.AddFootnote();
+                var fnParas = oDoc.GetFootnotesFirstParagraphs();
+                if (fnParas && fnParas.length > 0) {
+                    var fnPara = fnParas[fnParas.length - 1];
+                    var sdt = Api.CreateInlineLvlSdt();
+                    sdt.SetTag(Asc.scope.tag);
+                    sdt.AddText(Asc.scope.text);
+                    fnPara.AddInlineLvlSdt(sdt);
+                }
+            }, false, true, function () {
+                log("info", "OnlyOfficeAdapter.addNoteCitation.success", { tag: tag });
+                resolve(tag);
+            }, { tag: tag, text: cleanText });
+        });
+    };
 
     OnlyOfficeAdapter.prototype.updateControlText = function (internalId, text) {
         return new Promise(function (resolve) {
@@ -404,8 +443,13 @@
         };
 
         var self = this;
-        var op = isNoteStyle ? self.adapter.addFootnote() : Promise.resolve();
-
+        if (isNoteStyle && self.adapter && self.adapter.addNoteCitation) {
+            return self.adapter.addNoteCitation(base64Tag, cleanText).then(function (result) {
+                log("success", "DocumentModule.insertCitation", { citationId: citationObj.citationId, isNoteStyle: true });
+                return result;
+            });
+        }
+        var op = Promise.resolve();
         return op.then(function () {
             if (self.adapter && self.adapter.addContentControl) {
                 return self.adapter.addContentControl(2, { Tag: base64Tag, Lock: 0, PlaceHolderText: cleanText }, cleanText, false);

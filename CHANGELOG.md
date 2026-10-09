@@ -6,6 +6,7 @@
 - Added dynamic hanging indent formatting according to CSL style metadata (`params.hangingindent`).
 - Supported atomic in-place updating of existing `MENDELEY_BIBLIOGRAPHY` Content Controls.
 - Added unit test suite in `tests/docbuilder.test.js`.
+- Fixed note/footnote citations: append inline content control (`ApiInlineLvlSdt`) directly to footnote paragraph (`GetFootnotesFirstParagraphs`) so citation text appears immediately beside footnote number without line break.
 
 ## 1.0.4
 - Refactored and modularized monolithic `scripts/code.js` (2,250 lines) into 19 single-responsibility modules.
