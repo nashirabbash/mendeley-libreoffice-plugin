@@ -1777,7 +1777,11 @@
             return itemPayload;
         });
 
-        documentModule.insertCitation(citationItems, renderedText, isNoteStyle).catch(function(err) {
+        showLoader(true);
+        documentModule.insertCitation(citationItems, renderedText, isNoteStyle).then(function() {
+            showLoader(false);
+        }).catch(function(err) {
+            showLoader(false);
             showError("Failed to insert citation: " + (err.message || err));
         });
     }

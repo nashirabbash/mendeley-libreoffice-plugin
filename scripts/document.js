@@ -236,14 +236,38 @@
                 resolve("");
                 return;
             }
-            // AddContentControl: type 1 = Block, type 2 = Inline
-            window.Asc.plugin.executeMethod("AddContentControl", [type, properties], function (ctrl) {
-                var method = isHtml ? "PasteHtml" : "PasteText";
-                window.Asc.plugin.executeMethod(method, [content], function () {
-                    var id = ctrl ? (ctrl.InternalId || ctrl.Id || "") : "";
-                    log("info", "OnlyOfficeAdapter.addContentControl", { type: type, tag: properties.Tag, id: id });
-                    resolve(id);
-                });
+            var tag = properties.Tag || "";
+
+            // 1. Insert content control with tag
+            window.Asc.plugin.executeMethod("AddContentControl", [type, { Tag: tag, Lock: 0 }], function () {
+                // 2. Clear default placeholder ("Your text here") and insert actual content
+                window.Asc.plugin.callCommand(function () {
+                    var oDoc = Api.GetDocument();
+                    var aControls = (oDoc.GetContentControlsByTag) ? oDoc.GetContentControlsByTag(Asc.scope.tag) : null;
+                    if (!aControls || !aControls.length) {
+                        var all = oDoc.GetAllContentControls();
+                        aControls = [];
+                        for (var i = 0; i < all.length; i++) {
+                            if (all[i].GetTag && all[i].GetTag() === Asc.scope.tag) {
+                                aControls.push(all[i]);
+                            }
+                        }
+                    }
+
+                    if (aControls && aControls.length > 0) {
+                        var ctrl = aControls[aControls.length - 1];
+                        var oRange = ctrl.GetRange();
+                        oRange.Delete();
+                        if (Asc.scope.isHtml) {
+                            oRange.PasteHtml(Asc.scope.content);
+                        } else {
+                            oRange.AddText(Asc.scope.content);
+                        }
+                    }
+                }, false, true, function () {
+                    log("info", "OnlyOfficeAdapter.addContentControl", { type: type, tag: tag });
+                    resolve(tag);
+                }, { tag: tag, content: content, isHtml: !!isHtml });
             });
         });
     };
