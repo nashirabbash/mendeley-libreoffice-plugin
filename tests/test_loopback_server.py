@@ -30,6 +30,75 @@ class LoopbackServerTests(unittest.TestCase):
         self.thread.join(timeout=2)
         self.temp_dir.cleanup()
 
+    def test_health_allows_only_loopback_web_origins(self):
+        request = Request(
+            self.base_url + "/health",
+            headers={"Origin": "http://localhost:3000"},
+        )
+        with urlopen(request) as response:
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.headers["Access-Control-Allow-Origin"], "http://localhost:3000")
+
+        request = Request(
+            self.base_url + "/health",
+            headers={"Origin": "https://attacker.invalid"},
+        )
+        with self.assertRaises(HTTPError) as error:
+            urlopen(request)
+        self.assertEqual(error.exception.code, 403)
+        error.exception.close()
+    def test_file_origin_is_allowed_for_onlyoffice_plugin(self):
+        request = Request(
+            self.base_url + "/health",
+            headers={"Origin": "file://"},
+        )
+        with urlopen(request) as response:
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.headers["Access-Control-Allow-Origin"], "file://")
+        preflight = Request(
+            self.base_url + "/token",
+            headers={"Origin": "file://", "Access-Control-Request-Method": "DELETE"},
+            method="OPTIONS",
+        )
+        with urlopen(preflight) as response:
+            self.assertEqual(response.status, 204)
+            self.assertEqual(response.headers["Access-Control-Allow-Origin"], "file://")
+
+        request = Request(
+            self.base_url + "/token",
+            headers={"Origin": "file://"},
+            method="DELETE",
+        )
+        with urlopen(request) as response:
+            self.assertEqual(json.load(response), {"status": "cleared"})
+
+    def test_loopback_origin_can_preflight_and_clear_token(self):
+        SERVER.write_token(self.token_path, "stale-token")
+        origin = "http://localhost:3000"
+
+        preflight = Request(
+            self.base_url + "/token",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "DELETE",
+            },
+            method="OPTIONS",
+        )
+        with urlopen(preflight) as response:
+            self.assertEqual(response.status, 204)
+            self.assertEqual(response.headers["Access-Control-Allow-Origin"], origin)
+            self.assertIn("DELETE", response.headers["Access-Control-Allow-Methods"])
+
+        request = Request(
+            self.base_url + "/token",
+            headers={"Origin": origin},
+            method="DELETE",
+        )
+        with urlopen(request) as response:
+            self.assertEqual(json.load(response), {"status": "cleared"})
+        self.assertFalse(self.token_path.exists())
+
+
     def test_health_endpoint_identifies_helper_for_launcher_reuse(self):
         with urlopen(self.base_url + "/health") as response:
             self.assertEqual(response.status, 200)

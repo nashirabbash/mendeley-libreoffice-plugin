@@ -1,5 +1,7 @@
 # Change Log
 
+- Fixed ONLYOFFICE `file://` login requests rejected by Helper CORS; allow file and loopback origins, keep remote origins blocked, and clear stale login errors on retry.
+
 - Waited for citation and existing bibliography refresh to finish after style changes before allowing bibliography commands, preventing overlapping document writes.
 - Fixed duplicate journal names in bibliography output by mapping Mendeley source and series to separate CSL fields.
 - Explicitly set italic and bold on every bibliography run from CSL markup, preventing Word insertion formatting from leaking into unformatted text.

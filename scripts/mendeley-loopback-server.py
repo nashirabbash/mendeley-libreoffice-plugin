@@ -76,9 +76,22 @@ def make_handler(token_path):
     class OAuthLoopbackHandler(BaseHTTPRequestHandler):
         def _approved_origin(self):
             origin = self.headers.get("Origin")
-            server_origin = "http://127.0.0.1:{}".format(self.server.server_port)
-            localhost_origin = "http://localhost:{}".format(self.server.server_port)
-            return origin in (None, "null", server_origin, localhost_origin)
+            if origin in (None, "null", "file://"):
+                return True
+            try:
+                parsed = urllib.parse.urlsplit(origin)
+                parsed.port
+            except ValueError:
+                return False
+            return (
+                parsed.scheme in ("http", "https")
+                and parsed.hostname in ("localhost", "127.0.0.1", "::1")
+                and not parsed.username
+                and not parsed.password
+                and not parsed.path
+                and not parsed.query
+                and not parsed.fragment
+            )
 
         def _approved_host(self):
             host = self.headers.get("Host", "").split(":", 1)[0]
@@ -89,20 +102,34 @@ def make_handler(token_path):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
-            if self.headers.get("Origin") == "null":
-                self.send_header("Access-Control-Allow-Origin", "null")
+            origin = self.headers.get("Origin")
+            if origin is not None and self._approved_origin():
+                self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
             self.end_headers()
             self.wfile.write(body)
+        def _reject_request(self):
+            print(json.dumps({
+                "level": "warn",
+                "event": "http.request_rejected",
+                "data": {
+                    "method": self.command,
+                    "path": urllib.parse.urlsplit(self.path).path,
+                    "origin": self.headers.get("Origin"),
+                    "host": self.headers.get("Host"),
+                },
+            }), flush=True)
+            self._send_json(403, {"error": "origin_not_allowed"})
+
 
         def do_OPTIONS(self):
             if not self._approved_origin():
-                self._send_json(403, {"error": "origin_not_allowed"})
+                self._reject_request()
                 return
             self.send_response(204)
             origin = self.headers.get("Origin")
-            if origin == "null":
-                self.send_header("Access-Control-Allow-Origin", "null")
+            if origin is not None:
+                self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
@@ -110,7 +137,7 @@ def make_handler(token_path):
 
         def do_GET(self):
             if not self._approved_host() or not self._approved_origin():
-                self._send_json(403, {"error": "origin_not_allowed"})
+                self._reject_request()
                 return
             path = urllib.parse.urlparse(self.path).path
             if path == "/health":
@@ -130,7 +157,7 @@ def make_handler(token_path):
 
         def do_POST(self):
             if not self._approved_host() or not self._approved_origin():
-                self._send_json(403, {"error": "origin_not_allowed"})
+                self._reject_request()
                 return
             path = urllib.parse.urlparse(self.path).path
             if path == "/shutdown":
@@ -157,7 +184,7 @@ def make_handler(token_path):
 
         def do_DELETE(self):
             if not self._approved_host() or not self._approved_origin():
-                self._send_json(403, {"error": "origin_not_allowed"})
+                self._reject_request()
                 return
             if urllib.parse.urlparse(self.path).path != "/token":
                 self._send_json(404, {"error": "not_found"})

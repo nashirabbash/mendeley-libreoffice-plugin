@@ -15,6 +15,7 @@
 
     var authFlow = {
         authenticate: function () {
+            if (Helpers && Helpers.showError) Helpers.showError(null);
             if (typeof localStorage !== "undefined") localStorage.removeItem("mendToken");
             if (typeof window !== "undefined") window._activeMendToken = null;
             if (typeof window !== "undefined" && window.Asc && window.Asc.plugin && window.Asc.plugin.mendeley && window.Asc.plugin.mendeley.auth) {
@@ -23,7 +24,9 @@
             }
             fetch("http://127.0.0.1:8080/health").then(function (response) {
                 if (!response.ok) throw new Error("Mendeley Helper tidak merespons pada port 8080.");
-                return response.json();
+                return response.json().catch(function () {
+                    throw new Error("Port 8080 tidak menjalankan Mendeley Helper. Tutup aplikasi lain yang memakai port tersebut, lalu coba lagi.");
+                });
             }).then(function (health) {
                 if (!health || health.service !== "mendeley-loopback" || health.status !== "ok") {
                     throw new Error("Port 8080 dipakai aplikasi lain. Tutup aplikasi tersebut, lalu coba lagi.");
